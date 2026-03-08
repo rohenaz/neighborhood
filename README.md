@@ -33,10 +33,6 @@ Or run the slash command:
 /crime-report 48312
 ```
 
-<div align="center">
-<img src="promo/neighborhood-crime-map-demo.gif" alt="neighborhood crime map demo" width="720" />
-</div>
-
 ## Data Sources
 
 | Source | Data Type | Updates | Auth |
