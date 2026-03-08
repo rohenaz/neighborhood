@@ -21,7 +21,7 @@ const SOURCE_METADATA: Array<{
   {
     name: "crimemapping",
     label: "CrimeMapping (Axon)",
-    coverage: "Participating police agencies — good Macomb County coverage",
+    coverage: "Participating police agencies — good Travis County coverage",
     updateFrequency: "Daily",
     requiresApiKey: false,
     testUrl: "https://www.crimemapping.com/",
@@ -29,7 +29,7 @@ const SOURCE_METADATA: Array<{
   {
     name: "arcgis",
     label: "ArcGIS Feature Services",
-    coverage: "Macomb County GIS + SEMCOG Southeast Michigan",
+    coverage: "Travis County GIS + Austin area",
     updateFrequency: "Varies by agency — typically daily to weekly",
     requiresApiKey: false,
     testUrl: "https://gis.macombgov.org/arcgis/rest/services",
@@ -54,7 +54,7 @@ const SOURCE_METADATA: Array<{
   {
     name: "news",
     label: "Crime News RSS Feeds",
-    coverage: "Google News + Patch.com local (Sterling Heights / Macomb)",
+    coverage: "Google News + Patch.com local (Austin / Travis County)",
     updateFrequency: "Real-time (RSS)",
     requiresApiKey: false,
     testUrl: "https://news.google.com/rss/search?q=crime",

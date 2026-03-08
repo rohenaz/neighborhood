@@ -6,12 +6,12 @@ import type { NewsAlert } from "../types.ts";
 const GOOGLE_NEWS_RSS = (query: string) =>
   `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
 
-// Patch.com feeds for Sterling Heights / Macomb area
+// Patch.com feeds for Austin, TX / Travis County area
 const PATCH_FEEDS = [
-  "https://patch.com/michigan/sterlingheights/local-news/rss.xml",
-  "https://patch.com/michigan/clinton-township/local-news/rss.xml",
-  "https://patch.com/michigan/troy-mi/local-news/rss.xml",
-  "https://patch.com/michigan/warren-mi/local-news/rss.xml",
+  "https://patch.com/texas/downtownaustin/local-news/rss.xml",
+  "https://patch.com/texas/eastaustin/local-news/rss.xml",
+  "https://patch.com/texas/roundrock/local-news/rss.xml",
+  "https://patch.com/texas/cedarpark/local-news/rss.xml",
 ];
 
 interface RSSItem {
@@ -144,8 +144,8 @@ export async function fetchNewsAlerts(
 ): Promise<NewsAlert[]> {
   const queries = [
     `${zipCode} crime`,
-    `Sterling Heights Michigan crime`,
-    `Macomb County Michigan crime`,
+    `Austin Texas crime`,
+    `Travis County Texas crime`,
   ];
 
   const feedUrls: Array<{ url: string; source: string }> = [

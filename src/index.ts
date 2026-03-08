@@ -18,7 +18,7 @@ import type { IncidentSource } from "./types.ts";
 // ---------------------------------------------------------------------------
 
 const GetIncidentsSchema = z.object({
-  zipCode: z.string().min(5).max(10).describe("US ZIP code (e.g. 48312)"),
+  zipCode: z.string().min(5).max(10).describe("US ZIP code (e.g. 78701)"),
   radius: z
     .number()
     .positive()
@@ -97,7 +97,7 @@ const TOOLS = [
       properties: {
         zipCode: {
           type: "string",
-          description: "US ZIP code (e.g. 48312 for Sterling Heights, MI)",
+          description: "US ZIP code (e.g. 78701 for Austin, TX)",
         },
         radius: {
           type: "number",

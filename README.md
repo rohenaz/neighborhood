@@ -12,7 +12,7 @@
 
 A Claude Code plugin that aggregates live crime data from six public sources and exposes it through MCP tools. Accepts any US zip code and returns unified GeoJSON, statistics, interactive maps, and news alerts.
 
-Optimized for Sterling Heights, MI (Macomb County) but works nationwide.
+Optimized for Austin, TX (Travis County) but works nationwide.
 
 ## Quick Start
 
@@ -24,13 +24,13 @@ claude plugin install neighborhood
 Then ask Claude:
 
 ```
-What's the crime like near 48312?
+What's the crime like near 78701?
 ```
 
 Or run the slash command:
 
 ```
-/crime-report 48312
+/crime-report 78701
 ```
 
 ## Data Sources
@@ -39,7 +39,7 @@ Or run the slash command:
 |---|---|---|---|
 | SpotCrime | Incident reports with lat/lng | Daily | Optional (demo key included) |
 | CrimeMapping.com (Axon) | Mapped incidents from police departments | Live | None |
-| ArcGIS Feature Services | Macomb County GIS + SEMCOG spatial data | Live | None |
+| ArcGIS Feature Services | Travis County GIS + spatial data | Live | None |
 | NSOPW | National Sex Offender Public Registry | Live | None |
 | FBI Crime Data Explorer | Historical NIBRS aggregate statistics | Annual | Free API key |
 | News RSS | Google News + Patch.com local crime news | Live | Optional |
@@ -86,7 +86,7 @@ claude --plugin-dir /path/to/neighborhood
 Run the MCP server standalone:
 
 ```bash
-bun run index.ts
+bun run src/index.ts
 ```
 
 ## Configuration
@@ -111,23 +111,23 @@ export SPOTCRIME_API_KEY=your_key_here
 **Natural language queries:**
 
 ```
-What's the crime like near 48312?
-Generate a crime report for Sterling Heights
-Compare safety between 48312 and 90210
-Show me a map of recent incidents in zip 48312
+What's the crime like near 78701?
+Generate a crime report for Austin, TX
+Compare safety between 78701 and 78704
+Show me a map of recent incidents in zip 78701
 What types of crimes are trending in this area?
 ```
 
 **Slash command:**
 
 ```
-/crime-report 48312
+/crime-report 78701
 ```
 
 **Direct tool invocation** (in Claude conversations):
 
 ```
-Use get_incidents for zip 48312 and then get_map_html to show me a map
+Use get_incidents for zip 78701 and then get_map_html to show me a map
 ```
 
 ## Tech Stack

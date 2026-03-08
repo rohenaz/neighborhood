@@ -6,7 +6,7 @@ import type { RawIncident } from "../types.ts";
 
 const FBI_BASE = "https://api.usa.gov/crime/fbi/cde";
 
-// ORI codes for agencies covering Sterling Heights / Macomb County, MI
+// ORI codes for agencies covering Austin, TX / Travis County
 // Sterling Heights PD: MI0500900
 // Macomb County Sheriff: MI0500000
 // Michigan State Police Macomb: MI0500600
@@ -114,7 +114,7 @@ export async function fetchFBI(
 
   const incidents: RawIncident[] = [];
 
-  // Agency locations for Macomb County (hardcoded since FBI data is aggregate)
+  // Agency locations (hardcoded since FBI data is aggregate)
   const agencyLocations: Record<string, { lat: number; lng: number; name: string }> = {
     MI0500900: { lat: 42.5803, lng: -83.0302, name: "Sterling Heights PD" },
     MI0500000: { lat: 42.6665, lng: -82.9263, name: "Macomb County Sheriff" },

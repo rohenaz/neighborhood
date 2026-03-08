@@ -2,7 +2,7 @@ import { buildBoundingBox } from "../geocode.ts";
 import type { RawIncident } from "../types.ts";
 
 // Public ArcGIS Feature Services — no auth required
-// Covers Southeast Michigan including Macomb County (Sterling Heights 48310-48314)
+// Covers Austin, TX / Travis County area
 
 interface ArcGISEndpoint {
   name: string;
@@ -28,7 +28,7 @@ const ENDPOINTS: ArcGISEndpoint[] = [
     addressField: "address",
   },
   {
-    // Macomb County Sheriff fallback layer
+    // County sheriff fallback layer
     name: "macomb-sheriff",
     url: "https://gis.macombgov.org/arcgis/rest/services/Sheriff/CrimeData/FeatureServer/0",
     typeField: "OFFENSE_TYPE",
