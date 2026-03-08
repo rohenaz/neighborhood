@@ -2,12 +2,7 @@
   "mcpServers": {
     "neighborhood": {
       "command": "bun",
-      "args": ["run", "${CLAUDE_PLUGIN_ROOT}/src/index.ts"],
-      "env": {
-        "SPOTCRIME_API_KEY": "${SPOTCRIME_API_KEY}",
-        "FBI_API_KEY": "${FBI_API_KEY}",
-        "NEWSAPI_KEY": "${NEWSAPI_KEY}"
-      }
+      "args": ["run", "${CLAUDE_PLUGIN_ROOT}/src/index.ts"]
     }
   }
 }
