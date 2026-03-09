@@ -91,7 +91,7 @@ const TOOLS = [
   {
     name: "get_incidents",
     description:
-      "Fetch recent crime incidents near a ZIP code from multiple live sources (SpotCrime, CrimeMapping, ArcGIS, NSOPW, FBI, news). Returns a GeoJSON FeatureCollection with normalized incident properties. If a source is unavailable, other sources continue and errors are reported in the sourceErrors field.",
+      "Fetch recent crime incidents near a US ZIP code. Queries all connected sources in parallel and returns a unified GeoJSON FeatureCollection. Free sources (CrimeMapping, ArcGIS, NSOPW, news) work out of the box. Add FBI_API_KEY and SPOTCRIME_API_KEY for significantly more data. Run list_sources first to see what's connected.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -131,7 +131,7 @@ const TOOLS = [
   {
     name: "get_crime_stats",
     description:
-      "Get aggregated crime statistics for a ZIP code: counts by type/severity, trend analysis, and FBI historical data. Useful for understanding crime patterns rather than individual incidents.",
+      "Get aggregated crime statistics for a ZIP code: incident counts by type and severity, trend analysis, and historical FBI data. Best for understanding patterns. Add FBI_API_KEY for annual offense breakdowns from nearby agencies.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -151,7 +151,7 @@ const TOOLS = [
   {
     name: "list_sources",
     description:
-      "List all configured crime data sources with their status (online/offline), coverage area, update frequency, and API key requirements. Run this to check which sources are available before querying.",
+      "Show all data sources with connection status, what each one provides, and which API keys you can add for more coverage. Returns a summary with actionable next steps.",
     inputSchema: {
       type: "object" as const,
       properties: {},
@@ -161,7 +161,7 @@ const TOOLS = [
   {
     name: "get_map_html",
     description:
-      "Generate a self-contained HTML page with an interactive Leaflet.js crime map for a given ZIP code. The page uses OpenStreetMap tiles (no API key needed), shows color-coded pins by crime type, and has popups with incident details. Chatbots and browsers can render this HTML directly.",
+      "Generate an interactive crime map as a self-contained HTML page. Uses OpenStreetMap tiles with color-coded markers by crime type, popups with incident details, a legend, and a dark UI. Save to a file and open in a browser, or render inline.",
     inputSchema: {
       type: "object" as const,
       properties: {

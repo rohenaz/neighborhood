@@ -1,38 +1,35 @@
 import type { IncidentSource, SourceStatus } from "../types.ts";
 
-const SOURCE_METADATA: Array<{
+interface SourceMeta {
   name: IncidentSource;
   label: string;
   coverage: string;
   updateFrequency: string;
   requiresApiKey: boolean;
   apiKeyEnvVar?: string;
+  signupUrl?: string;
+  unlocks: string;
   testUrl: string;
-}> = [
-  {
-    name: "spotcrime",
-    label: "SpotCrime",
-    coverage: "National — aggregates police blotter data",
-    updateFrequency: "Daily",
-    requiresApiKey: false, // uses demo key by default
-    apiKeyEnvVar: "SPOTCRIME_API_KEY",
-    testUrl: "https://api.spotcrime.com/crimes.json",
-  },
+}
+
+const SOURCE_METADATA: SourceMeta[] = [
   {
     name: "crimemapping",
     label: "CrimeMapping (Axon)",
-    coverage: "Participating police agencies — good Travis County coverage",
+    coverage: "Participating US police agencies — varies by city",
     updateFrequency: "Daily",
     requiresApiKey: false,
+    unlocks: "Real-time incidents from police agencies using the Axon platform",
     testUrl: "https://www.crimemapping.com/",
   },
   {
     name: "arcgis",
-    label: "ArcGIS Feature Services",
-    coverage: "Travis County GIS + Austin area",
+    label: "ArcGIS Open Data",
+    coverage: "County/city GIS portals with public crime layers",
     updateFrequency: "Varies by agency — typically daily to weekly",
     requiresApiKey: false,
-    testUrl: "https://gis.macombgov.org/arcgis/rest/services",
+    unlocks: "GIS-sourced crime data from local government open data portals",
+    testUrl: "https://www.arcgis.com/",
   },
   {
     name: "nsopw",
@@ -40,24 +37,41 @@ const SOURCE_METADATA: Array<{
     coverage: "National — all 50 states + DC + territories",
     updateFrequency: "Real-time (pulled from state registries)",
     requiresApiKey: false,
+    unlocks: "Registered sex offender locations near any US address",
     testUrl: "https://www.nsopw.gov/",
   },
   {
+    name: "news",
+    label: "Crime News (RSS)",
+    coverage: "Google News + Patch.com local feeds",
+    updateFrequency: "Real-time (RSS)",
+    requiresApiKey: false,
+    unlocks: "Local crime news headlines and alerts from RSS feeds",
+    testUrl: "https://news.google.com/rss/search?q=crime",
+  },
+  {
     name: "fbi",
-    label: "FBI Crime Data Explorer (CDE)",
-    coverage: "National — NIBRS aggregate data by agency ORI",
-    updateFrequency: "Annual (prior year data)",
+    label: "FBI Crime Data Explorer",
+    coverage: "National — NIBRS data for 18,000+ law enforcement agencies",
+    updateFrequency: "Annual (prior-year aggregate data)",
     requiresApiKey: true,
     apiKeyEnvVar: "FBI_API_KEY",
+    signupUrl: "https://api.data.gov/signup",
+    unlocks:
+      "Historical crime statistics by offense type for nearby agencies — adds trend context to real-time data",
     testUrl: "https://api.usa.gov/crime/fbi/cde/",
   },
   {
-    name: "news",
-    label: "Crime News RSS Feeds",
-    coverage: "Google News + Patch.com local (Austin / Travis County)",
-    updateFrequency: "Real-time (RSS)",
-    requiresApiKey: false,
-    testUrl: "https://news.google.com/rss/search?q=crime",
+    name: "spotcrime",
+    label: "SpotCrime",
+    coverage: "National — aggregates police blotter data from 1,500+ agencies",
+    updateFrequency: "Daily",
+    requiresApiKey: true,
+    apiKeyEnvVar: "SPOTCRIME_API_KEY",
+    signupUrl: "https://spotcrime.com/police/api",
+    unlocks:
+      "Daily crime incidents from police blotters — the largest single source of real-time incident data",
+    testUrl: "https://api.spotcrime.com/crimes.json",
   },
 ];
 
@@ -74,7 +88,16 @@ async function checkSourceOnline(testUrl: string): Promise<boolean> {
   }
 }
 
-export async function listSources(): Promise<SourceStatus[]> {
+export async function listSources(): Promise<{
+  sources: SourceStatus[];
+  summary: {
+    active: number;
+    available: number;
+    total: number;
+    missingKeys: string[];
+    tip: string;
+  };
+}> {
   const checks = await Promise.allSettled(
     SOURCE_METADATA.map(async (meta) => {
       const online = await checkSourceOnline(meta.testUrl);
@@ -95,18 +118,17 @@ export async function listSources(): Promise<SourceStatus[]> {
       };
 
       if (meta.requiresApiKey && !hasApiKey) {
-        status.error = `Missing API key: set ${meta.apiKeyEnvVar} environment variable`;
+        status.error = `Add ${meta.apiKeyEnvVar} to unlock: ${meta.unlocks}`;
       }
 
       return status;
     })
   );
 
-  return checks.map((result, i): SourceStatus => {
+  const sources = checks.map((result, i): SourceStatus => {
     const meta = SOURCE_METADATA[i];
     if (result.status === "fulfilled") return result.value;
 
-    // Should not happen since we catch internally, but handle it
     return {
       name: meta?.name ?? ("unknown" as IncidentSource),
       label: meta?.label ?? "Unknown",
@@ -122,4 +144,29 @@ export async function listSources(): Promise<SourceStatus[]> {
           : String(result.reason),
     };
   });
+
+  const active = sources.filter((s) => s.online && s.hasApiKey).length;
+  const available = sources.filter(
+    (s) => s.online && !s.hasApiKey && s.requiresApiKey
+  ).length;
+
+  const missingKeys = SOURCE_METADATA.filter(
+    (m) => m.requiresApiKey && m.apiKeyEnvVar && !process.env[m.apiKeyEnvVar]
+  ).map((m) => `${m.apiKeyEnvVar} — ${m.unlocks} (free: ${m.signupUrl})`);
+
+  const tip =
+    missingKeys.length > 0
+      ? `Connect ${missingKeys.length} more API${missingKeys.length > 1 ? "s" : ""} for broader coverage. Add keys to ~/.config/neighborhood/.env`
+      : "All available sources are connected.";
+
+  return {
+    sources,
+    summary: {
+      active,
+      available,
+      total: sources.length,
+      missingKeys,
+      tip,
+    },
+  };
 }
