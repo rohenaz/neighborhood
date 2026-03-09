@@ -71,6 +71,10 @@ interface MapData {
   sources?: SourceInfo[];
 }
 
+let currentMap: L.Map | null = null;
+let currentRadius = 5;
+let currentDays = 30;
+
 function renderMap(data: MapData): void {
   const loadingEl = document.getElementById("loading");
   const headerEl = document.getElementById("header");
@@ -82,11 +86,19 @@ function renderMap(data: MapData): void {
   if (mapEl) mapEl.style.display = "block";
   if (legendEl) legendEl.style.display = "block";
 
+  // Destroy previous map if re-rendering
+  if (currentMap) {
+    currentMap.remove();
+    currentMap = null;
+  }
+
   const { zipCode, lat, lng, radius, days, features, sourceErrors, sources } =
     data;
+  currentRadius = radius;
+  currentDays = days;
   const sourceCount = new Set(features.map((f) => f.properties.source)).size;
 
-  const zipEl = document.getElementById("zip");
+  const zipEl = document.getElementById("zip") as HTMLElement | null;
   const metaEl = document.getElementById("meta");
   if (zipEl) zipEl.textContent = zipCode;
   if (metaEl) {
@@ -154,6 +166,7 @@ function renderMap(data: MapData): void {
 
   // Leaflet map
   const map = L.map("map", { zoomControl: false }).setView([lat, lng], 13);
+  currentMap = map;
   L.control.zoom({ position: "topright" }).addTo(map);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
@@ -272,4 +285,63 @@ app.ontoolresult = (params) => {
 
 app.connect().then(() => {
   app.sendSizeChanged({ height: 600 });
+});
+
+// Zip code editing
+const zipDisplay = document.getElementById("zip") as HTMLElement;
+const zipForm = document.getElementById("zip-form") as HTMLFormElement;
+const zipInput = document.getElementById("zip-input") as HTMLInputElement;
+
+function showZipEditor() {
+  zipInput.value = zipDisplay.textContent ?? "";
+  zipDisplay.style.display = "none";
+  zipForm.style.display = "block";
+  zipInput.focus();
+  zipInput.select();
+}
+
+function hideZipEditor() {
+  zipForm.style.display = "none";
+  zipDisplay.style.display = "block";
+}
+
+async function submitZip(newZip: string) {
+  const trimmed = newZip.trim();
+  if (!/^\d{5}$/.test(trimmed)) {
+    hideZipEditor();
+    return;
+  }
+  if (trimmed === zipDisplay.textContent) {
+    hideZipEditor();
+    return;
+  }
+
+  hideZipEditor();
+  zipDisplay.textContent = trimmed;
+
+  // Show loading state in meta
+  const metaEl = document.getElementById("meta");
+  if (metaEl) metaEl.innerHTML = '<span style="color:var(--muted)">Loading...</span>';
+
+  const result = await app.callServerTool({
+    name: "get_map_html",
+    arguments: { zipCode: trimmed, radius: currentRadius, days: currentDays },
+  });
+
+  const data = result.structuredContent as MapData | undefined;
+  if (data) {
+    renderMap(data);
+  }
+}
+
+zipDisplay.addEventListener("click", showZipEditor);
+zipForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  submitZip(zipInput.value);
+});
+zipInput.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") hideZipEditor();
+});
+zipInput.addEventListener("blur", () => {
+  submitZip(zipInput.value);
 });
