@@ -40459,7 +40459,7 @@ function registerTools(server) {
       format: exports_external.enum(["summary", "json"]).optional().default("summary").describe("Output format: 'summary' for concise text (default), 'json' for raw data")
     }
   }, async (args) => {
-    const resolved = resolveLocation(args.zipCode);
+    const resolved = await resolveLocation(args.zipCode);
     if (!resolved) {
       return { content: [{ type: "text", text: `Could not resolve "${args.zipCode}" to a US location. Try a ZIP code, state abbreviation, or state name.` }] };
     }
@@ -40483,7 +40483,7 @@ function registerTools(server) {
       format: exports_external.enum(["summary", "json"]).optional().default("summary").describe("Output format: 'summary' for concise text (default), 'json' for raw data")
     }
   }, async (args) => {
-    const resolved = resolveLocation(args.zipCode);
+    const resolved = await resolveLocation(args.zipCode);
     if (!resolved) {
       return { content: [{ type: "text", text: `Could not resolve "${args.zipCode}" to a US location. Try a ZIP code, state abbreviation, or state name.` }] };
     }
@@ -40516,7 +40516,7 @@ function registerTools(server) {
       format: exports_external.enum(["summary", "json"]).optional().default("summary").describe("Output format: 'summary' for concise text (default), 'json' for raw data")
     }
   }, async (args) => {
-    const resolved = resolveLocation(args.zipCode);
+    const resolved = await resolveLocation(args.zipCode);
     if (!resolved) {
       return { content: [{ type: "text", text: `Could not resolve "${args.zipCode}" to a US location. Try a ZIP code, state abbreviation, or state name.` }] };
     }
@@ -40542,7 +40542,7 @@ function registerResources(server) {
       }
     }
   }, async (args) => {
-    const resolved = resolveLocation(args.zipCode);
+    const resolved = await resolveLocation(args.zipCode);
     if (!resolved) {
       return {
         structuredContent: {},

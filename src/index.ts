@@ -103,7 +103,7 @@ function registerTools(server: McpServer) {
       },
     },
     async (args) => {
-      const resolved = resolveLocation(args.zipCode);
+      const resolved = await resolveLocation(args.zipCode);
       if (!resolved) {
         return { content: [{ type: "text" as const, text: `Could not resolve "${args.zipCode}" to a US location. Try a ZIP code, state abbreviation, or state name.` }] };
       }
@@ -149,7 +149,7 @@ function registerTools(server: McpServer) {
       },
     },
     async (args) => {
-      const resolved = resolveLocation(args.zipCode);
+      const resolved = await resolveLocation(args.zipCode);
       if (!resolved) {
         return { content: [{ type: "text" as const, text: `Could not resolve "${args.zipCode}" to a US location. Try a ZIP code, state abbreviation, or state name.` }] };
       }
@@ -224,7 +224,7 @@ function registerTools(server: McpServer) {
       },
     },
     async (args) => {
-      const resolved = resolveLocation(args.zipCode);
+      const resolved = await resolveLocation(args.zipCode);
       if (!resolved) {
         return { content: [{ type: "text" as const, text: `Could not resolve "${args.zipCode}" to a US location. Try a ZIP code, state abbreviation, or state name.` }] };
       }
@@ -277,7 +277,7 @@ function registerResources(server: McpServer) {
       },
     },
     async (args) => {
-      const resolved = resolveLocation(args.zipCode);
+      const resolved = await resolveLocation(args.zipCode);
       if (!resolved) {
         return {
           structuredContent: {},
