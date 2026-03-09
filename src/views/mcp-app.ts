@@ -87,15 +87,14 @@ function renderMap(data: MapData): void {
     `;
   }
 
-  // Error banner
+  // Error badges in header
   if (sourceErrors && sourceErrors.length > 0) {
-    const banner = document.getElementById("error-banner");
-    if (banner) {
-      banner.className = "error-banner";
-      banner.innerHTML = sourceErrors
+    const errorsEl = document.getElementById("header-errors");
+    if (errorsEl) {
+      errorsEl.innerHTML = sourceErrors
         .map(
           (e) =>
-            `<div class="error-item"><span class="error-source">${esc(e.source)}</span> ${esc(e.error)}</div>`
+            `<span class="header-error-badge">${esc(e.source)} offline</span>`
         )
         .join("");
     }
