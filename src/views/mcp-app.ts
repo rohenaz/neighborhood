@@ -213,7 +213,12 @@ const app = new App({ name: "neighborhood", version: "1.0.0" });
 // structuredContent is a top-level field on CallToolResult.
 app.ontoolresult = (params) => {
   const data = params.structuredContent as MapData | undefined;
-  if (data) renderMap(data);
+  if (data) {
+    renderMap(data);
+    app.sendSizeChanged({ height: 600 });
+  }
 };
 
-app.connect();
+app.connect().then(() => {
+  app.sendSizeChanged({ height: 600 });
+});
