@@ -1,312 +1,254 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+  RESOURCE_MIME_TYPE,
+  registerAppResource,
+  registerAppTool,
+} from "@modelcontextprotocol/ext-apps/server";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-
+import { zipToCoordinates } from "./geocode.ts";
 import { getAlerts } from "./tools/get-alerts.ts";
 import { getCrimeStats } from "./tools/get-crime-stats.ts";
 import { getIncidents } from "./tools/get-incidents.ts";
-import { getMapHtml } from "./tools/get-map-html.ts";
 import { listSources } from "./tools/list-sources.ts";
 import type { IncidentSource } from "./types.ts";
 
 // ---------------------------------------------------------------------------
-// Input schemas
+// Server setup — McpServer with MCP Apps support
 // ---------------------------------------------------------------------------
 
-const GetIncidentsSchema = z.object({
-  zipCode: z.string().min(5).max(10).describe("US ZIP code (e.g. 78701)"),
-  radius: z
-    .number()
-    .positive()
-    .max(50)
-    .optional()
-    .default(5)
-    .describe("Search radius in miles (default: 5)"),
-  sources: z
-    .array(z.enum(["arcgis", "fbi", "news"]))
-    .optional()
-    .describe("Data sources to query (default: all)"),
-  days: z
-    .number()
-    .int()
-    .positive()
-    .max(365)
-    .optional()
-    .default(30)
-    .describe("Number of days to look back (default: 30)"),
-});
+const MAP_RESOURCE_URI = "ui://neighborhood/map.html";
 
-const GetCrimeStatsSchema = z.object({
-  zipCode: z.string().min(5).max(10).describe("US ZIP code"),
-  days: z
-    .number()
-    .int()
-    .positive()
-    .max(365)
-    .optional()
-    .default(30)
-    .describe("Number of days for recent trend analysis (default: 30)"),
-});
-
-const GetMapHtmlSchema = z.object({
-  zipCode: z.string().min(5).max(10).describe("US ZIP code"),
-  radius: z
-    .number()
-    .positive()
-    .max(50)
-    .optional()
-    .default(5)
-    .describe("Search radius in miles (default: 5)"),
-  days: z
-    .number()
-    .int()
-    .positive()
-    .max(365)
-    .optional()
-    .default(30)
-    .describe("Number of days to include (default: 30)"),
-});
-
-const GetAlertsSchema = z.object({
-  zipCode: z.string().min(5).max(10).describe("US ZIP code"),
-  keywords: z
-    .array(z.string())
-    .optional()
-    .describe(
-      "Keywords to filter crime news (default: broad crime-related terms)"
-    ),
-});
-
-// ---------------------------------------------------------------------------
-// Tool definitions
-// ---------------------------------------------------------------------------
-
-const TOOLS = [
-  {
-    name: "get_incidents",
-    description:
-      "Fetch recent crime incidents near a US ZIP code. Queries all connected sources in parallel and returns a unified GeoJSON FeatureCollection. Free sources (CrimeMapping, ArcGIS, NSOPW, news) work out of the box. Add FBI_API_KEY and SPOTCRIME_API_KEY for significantly more data. Run list_sources first to see what's connected.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        zipCode: {
-          type: "string",
-          description: "US ZIP code (e.g. 78701 for Austin, TX)",
-        },
-        radius: {
-          type: "number",
-          description: "Search radius in miles (default: 5, max: 50)",
-          default: 5,
-        },
-        sources: {
-          type: "array",
-          items: {
-            type: "string",
-            enum: ["arcgis", "fbi", "news"],
-          },
-          description: "Specific data sources to query (default: all)",
-        },
-        days: {
-          type: "number",
-          description: "Days to look back (default: 30, max: 365)",
-          default: 30,
-        },
-      },
-      required: ["zipCode"],
-    },
-  },
-  {
-    name: "get_crime_stats",
-    description:
-      "Get aggregated crime statistics for a ZIP code: incident counts by type and severity, trend analysis, and historical FBI data. Best for understanding patterns. Add FBI_API_KEY for annual offense breakdowns from nearby agencies.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        zipCode: {
-          type: "string",
-          description: "US ZIP code",
-        },
-        days: {
-          type: "number",
-          description: "Days to include in recent trend (default: 30)",
-          default: 30,
-        },
-      },
-      required: ["zipCode"],
-    },
-  },
-  {
-    name: "list_sources",
-    description:
-      "Show all data sources with connection status, what each one provides, and which API keys you can add for more coverage. Returns a summary with actionable next steps.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {},
-      required: [],
-    },
-  },
-  {
-    name: "get_map_html",
-    description:
-      "Generate an interactive crime map as a self-contained HTML page. Uses OpenStreetMap tiles with color-coded markers by crime type, popups with incident details, a legend, and a dark UI. Save to a file and open in a browser, or render inline.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        zipCode: {
-          type: "string",
-          description: "US ZIP code",
-        },
-        radius: {
-          type: "number",
-          description: "Search radius in miles (default: 5)",
-          default: 5,
-        },
-        days: {
-          type: "number",
-          description: "Days to include (default: 30)",
-          default: 30,
-        },
-      },
-      required: ["zipCode"],
-    },
-  },
-  {
-    name: "get_alerts",
-    description:
-      "Fetch recent crime news and alerts for a ZIP code from RSS feeds (Google News, Patch.com local). Returns article titles, links, and snippets. Optionally filter by keywords.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        zipCode: {
-          type: "string",
-          description: "US ZIP code",
-        },
-        keywords: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            "Keywords to filter results (e.g. ['shooting', 'robbery'])",
-        },
-      },
-      required: ["zipCode"],
-    },
-  },
-] as const;
-
-// ---------------------------------------------------------------------------
-// Server setup
-// ---------------------------------------------------------------------------
-
-const server = new Server(
+const server = new McpServer(
   {
     name: "neighborhood",
     version: "1.0.0",
   },
   {
     capabilities: {
+      resources: {},
       tools: {},
     },
   }
 );
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: TOOLS,
-}));
+// ---------------------------------------------------------------------------
+// Regular tools (text-based responses)
+// ---------------------------------------------------------------------------
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
-  try {
-    switch (name) {
-      case "get_incidents": {
-        const input = GetIncidentsSchema.parse(args);
-        const result = await getIncidents({
-          zipCode: input.zipCode,
-          radius: input.radius,
-          sources: input.sources as IncidentSource[] | undefined,
-          days: input.days,
-        });
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "get_crime_stats": {
-        const input = GetCrimeStatsSchema.parse(args);
-        const result = await getCrimeStats(input);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "list_sources": {
-        const result = await listSources();
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "get_map_html": {
-        const input = GetMapHtmlSchema.parse(args);
-        const html = await getMapHtml(input);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: html,
-            },
-          ],
-        };
-      }
-
-      case "get_alerts": {
-        const input = GetAlertsSchema.parse(args);
-        const result = await getAlerts(input);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      default:
-        throw new Error(`Unknown tool: ${name}`);
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+server.registerTool(
+  "get_incidents",
+  {
+    title: "Get Crime Incidents",
+    description:
+      "Fetch recent crime incidents near a US ZIP code. Returns a unified GeoJSON FeatureCollection from ArcGIS, news, and FBI sources. Add FBI_API_KEY for historical data.",
+    inputSchema: {
+      zipCode: z.string().min(5).max(10).describe("US ZIP code (e.g. 78701)"),
+      radius: z
+        .number()
+        .positive()
+        .max(50)
+        .optional()
+        .default(5)
+        .describe("Search radius in miles (default: 5)"),
+      sources: z
+        .array(z.enum(["arcgis", "fbi", "news"]))
+        .optional()
+        .describe("Data sources to query (default: all)"),
+      days: z
+        .number()
+        .int()
+        .positive()
+        .max(365)
+        .optional()
+        .default(30)
+        .describe("Number of days to look back (default: 30)"),
+    },
+  },
+  async (args) => {
+    const result = await getIncidents({
+      zipCode: args.zipCode,
+      radius: args.radius,
+      sources: args.sources as IncidentSource[] | undefined,
+      days: args.days,
+    });
     return {
       content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({ error: message }, null, 2),
-        },
+        { type: "text" as const, text: JSON.stringify(result, null, 2) },
       ],
-      isError: true,
     };
   }
-});
+);
+
+server.registerTool(
+  "get_crime_stats",
+  {
+    title: "Get Crime Statistics",
+    description:
+      "Get aggregated crime statistics for a ZIP code: incident counts by type and severity, trend analysis, and historical FBI data.",
+    inputSchema: {
+      zipCode: z.string().min(5).max(10).describe("US ZIP code"),
+      days: z
+        .number()
+        .int()
+        .positive()
+        .max(365)
+        .optional()
+        .default(30)
+        .describe("Number of days for recent trend analysis (default: 30)"),
+    },
+  },
+  async (args) => {
+    const result = await getCrimeStats(args);
+    return {
+      content: [
+        { type: "text" as const, text: JSON.stringify(result, null, 2) },
+      ],
+    };
+  }
+);
+
+server.registerTool(
+  "list_sources",
+  {
+    title: "List Data Sources",
+    description:
+      "Show all data sources with connection status, what each one provides, and which API keys you can add for more coverage.",
+    inputSchema: {},
+  },
+  async () => {
+    const result = await listSources();
+    return {
+      content: [
+        { type: "text" as const, text: JSON.stringify(result, null, 2) },
+      ],
+    };
+  }
+);
+
+server.registerTool(
+  "get_alerts",
+  {
+    title: "Get Crime Alerts",
+    description:
+      "Fetch recent crime news and alerts for a ZIP code from RSS feeds (Google News, Patch.com). Returns article titles, links, and snippets.",
+    inputSchema: {
+      zipCode: z.string().min(5).max(10).describe("US ZIP code"),
+      keywords: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Keywords to filter crime news (default: broad crime-related terms)"
+        ),
+    },
+  },
+  async (args) => {
+    const result = await getAlerts(args);
+    return {
+      content: [
+        { type: "text" as const, text: JSON.stringify(result, null, 2) },
+      ],
+    };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// MCP App tool — interactive crime map rendered inline
+// ---------------------------------------------------------------------------
+
+registerAppTool(
+  server,
+  "get_map_html",
+  {
+    title: "Crime Map",
+    description:
+      "Generate an interactive crime map rendered inline. Shows color-coded markers by crime type with clickable popups, a legend, and a dark UI.",
+    inputSchema: {
+      zipCode: z.string().min(5).max(10).describe("US ZIP code"),
+      radius: z
+        .number()
+        .positive()
+        .max(50)
+        .optional()
+        .default(5)
+        .describe("Search radius in miles (default: 5)"),
+      days: z
+        .number()
+        .int()
+        .positive()
+        .max(365)
+        .optional()
+        .default(30)
+        .describe("Number of days to include (default: 30)"),
+    },
+    _meta: {
+      ui: {
+        resourceUri: MAP_RESOURCE_URI,
+      },
+    },
+  },
+  async (args) => {
+    const [coords, collection] = await Promise.all([
+      zipToCoordinates(args.zipCode),
+      getIncidents({
+        zipCode: args.zipCode,
+        radius: args.radius,
+        days: args.days,
+      }),
+    ]);
+
+    const summary = `${collection.features.length} incidents near ${args.zipCode} (${args.radius}mi, ${args.days}d)`;
+
+    return {
+      structuredContent: {
+        zipCode: args.zipCode,
+        radius: args.radius,
+        days: args.days,
+        lat: coords.lat,
+        lng: coords.lng,
+        features: collection.features,
+        sourceErrors: collection.sourceErrors,
+      },
+      content: [{ type: "text" as const, text: summary }],
+    };
+  }
+);
+
+// Register the View HTML resource that the map tool references
+registerAppResource(
+  server,
+  "Crime Map View",
+  MAP_RESOURCE_URI,
+  {
+    description: "Interactive Leaflet crime map with dark theme",
+    _meta: {
+      ui: {
+        csp: {
+          resourceDomains: [
+            "https://unpkg.com",
+            "https://*.tile.openstreetmap.org",
+          ],
+          connectDomains: ["https://*.tile.openstreetmap.org"],
+        },
+      },
+    },
+  },
+  async () => {
+    const viewPath = join(import.meta.dir, "views", "map.html");
+    const html = await readFile(viewPath, "utf-8");
+    return {
+      contents: [
+        {
+          uri: MAP_RESOURCE_URI,
+          mimeType: RESOURCE_MIME_TYPE,
+          text: html,
+        },
+      ],
+    };
+  }
+);
 
 // ---------------------------------------------------------------------------
 // Start
