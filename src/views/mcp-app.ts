@@ -162,10 +162,21 @@ interface GeoJsonFeatureProps {
     if (!href.startsWith("http")) return;
 
     e.preventDefault();
-    navigator.clipboard.writeText(href).then(
-      () => showToast("Link copied"),
-      () => showToast("Copy failed — open DevTools console")
-    );
+    // Clipboard API is blocked in sandboxed srcdoc iframes.
+    // Use execCommand fallback which works in more restrictive contexts.
+    const ta = document.createElement("textarea");
+    ta.value = href;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand("copy");
+      showToast("Link copied");
+    } catch {
+      showToast(href);
+    }
+    document.body.removeChild(ta);
   });
 })();
 
