@@ -12,7 +12,7 @@ interface SourceMeta {
   testUrl: string;
 }
 
-const SOURCE_METADATA: SourceMeta[] = [
+export const SOURCE_METADATA: SourceMeta[] = [
   {
     name: "arcgis",
     label: "ArcGIS Open Data",

@@ -21,7 +21,7 @@ import { zipToCoordinates } from "./geocode.ts";
 import { getAlerts } from "./tools/get-alerts.ts";
 import { getCrimeStats } from "./tools/get-crime-stats.ts";
 import { getIncidents } from "./tools/get-incidents.ts";
-import { listSources } from "./tools/list-sources.ts";
+import { listSources, SOURCE_METADATA } from "./tools/list-sources.ts";
 import type { IncidentSource } from "./types.ts";
 
 // ---------------------------------------------------------------------------
@@ -237,6 +237,16 @@ registerAppTool(
         lng: coords.lng,
         features: collection.features,
         sourceErrors: collection.sourceErrors,
+        sources: SOURCE_METADATA.map((m) => ({
+          name: m.name,
+          label: m.label,
+          requiresApiKey: m.requiresApiKey,
+          apiKeyEnvVar: m.apiKeyEnvVar,
+          signupUrl: m.signupUrl,
+          hasApiKey: m.requiresApiKey
+            ? Boolean(m.apiKeyEnvVar && process.env[m.apiKeyEnvVar])
+            : true,
+        })),
       },
       content: [{ type: "text" as const, text: summary }],
       _meta: {

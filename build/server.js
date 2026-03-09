@@ -39469,7 +39469,15 @@ function registerResources(server) {
         lat: coords.lat,
         lng: coords.lng,
         features: collection.features,
-        sourceErrors: collection.sourceErrors
+        sourceErrors: collection.sourceErrors,
+        sources: SOURCE_METADATA.map((m2) => ({
+          name: m2.name,
+          label: m2.label,
+          requiresApiKey: m2.requiresApiKey,
+          apiKeyEnvVar: m2.apiKeyEnvVar,
+          signupUrl: m2.signupUrl,
+          hasApiKey: m2.requiresApiKey ? Boolean(m2.apiKeyEnvVar && process.env[m2.apiKeyEnvVar]) : true
+        }))
       },
       content: [{ type: "text", text: summary }],
       _meta: {

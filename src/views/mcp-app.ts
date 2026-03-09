@@ -51,6 +51,15 @@ interface Feature {
   };
 }
 
+interface SourceInfo {
+  name: string;
+  label: string;
+  requiresApiKey: boolean;
+  apiKeyEnvVar?: string;
+  signupUrl?: string;
+  hasApiKey: boolean;
+}
+
 interface MapData {
   zipCode: string;
   lat: number;
@@ -59,6 +68,7 @@ interface MapData {
   days: number;
   features: Feature[];
   sourceErrors?: Array<{ source: string; error: string }>;
+  sources?: SourceInfo[];
 }
 
 function renderMap(data: MapData): void {
@@ -72,7 +82,8 @@ function renderMap(data: MapData): void {
   if (mapEl) mapEl.style.display = "block";
   if (legendEl) legendEl.style.display = "block";
 
-  const { zipCode, lat, lng, radius, days, features, sourceErrors } = data;
+  const { zipCode, lat, lng, radius, days, features, sourceErrors, sources } =
+    data;
   const sourceCount = new Set(features.map((f) => f.properties.source)).size;
 
   const zipEl = document.getElementById("zip");
@@ -97,6 +108,47 @@ function renderMap(data: MapData): void {
             `<span class="header-error-badge">${esc(e.source)} offline</span>`
         )
         .join("");
+    }
+  }
+
+  // Sources indicator
+  if (sources && sources.length > 0) {
+    const active = sources.filter((s) => s.hasApiKey).length;
+    const total = sources.length;
+    const indicatorEl = document.getElementById("sources-indicator");
+    if (indicatorEl) {
+      const allActive = active === total;
+      indicatorEl.className = `sources-indicator ${allActive ? "sources-all" : "sources-partial"}`;
+      indicatorEl.textContent = `${active}/${total}`;
+      indicatorEl.title = "Click to see API key configuration";
+
+      // Build popover rows
+      const rows = sources
+        .map((s) => {
+          const dot = s.hasApiKey ? "sources-dot-on" : "sources-dot-off";
+          const envLine = s.requiresApiKey && s.apiKeyEnvVar
+            ? `<code class="sources-env">${esc(s.apiKeyEnvVar)}</code>`
+            : '<span class="sources-env sources-no-key">no key needed</span>';
+          const linkHtml = !s.hasApiKey && s.signupUrl
+            ? ` <a href="${esc(s.signupUrl)}" target="_blank" rel="noopener noreferrer" class="sources-signup">get key</a>`
+            : "";
+          return `<div class="sources-row"><span class="sources-dot ${dot}"></span><span class="sources-name">${esc(s.label)}</span>${envLine}${linkHtml}</div>`;
+        })
+        .join("");
+
+      const popover = document.getElementById("sources-popover");
+      if (popover) {
+        popover.innerHTML = `<div class="sources-popover-title">Data Sources</div>${rows}`;
+      }
+
+      indicatorEl.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (popover) popover.classList.toggle("sources-popover-open");
+      });
+
+      document.addEventListener("click", () => {
+        if (popover) popover.classList.remove("sources-popover-open");
+      });
     }
   }
 
