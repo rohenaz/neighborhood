@@ -430,6 +430,30 @@
       color: var(--muted-fg);
       font-size: 14px;
     }
+
+    .link-toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      background: rgba(24, 24, 27, 0.92);
+      color: #fafafa;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 7px 14px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      z-index: 9999;
+      white-space: nowrap;
+    }
+    .link-toast.link-toast-visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
   </style>
 </head>
 <body>
@@ -455,6 +479,7 @@
     <h3>Crime Types</h3>
     <div id="legend-items"></div>
   </div>
+  <div class="link-toast" id="link-toast">Link copied</div>
   <script type="module" src="./mcp-app.ts"></script>
 </body>
 </html>

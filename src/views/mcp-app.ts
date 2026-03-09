@@ -135,6 +135,40 @@ interface GeoJsonFeatureProps {
   address: string;
 }
 
+// Intercept all external link clicks. The srcdoc iframe is sandboxed without
+// allow-popups, so target="_blank" silently fails. Copy the URL instead and
+// show a brief toast so the user can paste it elsewhere.
+(function setupLinkInterceptor() {
+  const toast = document.getElementById("link-toast") as HTMLElement | null;
+  if (!toast) return;
+
+  let hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function showToast(message: string) {
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.add("link-toast-visible");
+    if (hideTimer !== null) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      toast.classList.remove("link-toast-visible");
+      hideTimer = null;
+    }, 2000);
+  }
+
+  document.addEventListener("click", (e) => {
+    const target = (e.target as Element).closest("a[href]") as HTMLAnchorElement | null;
+    if (!target) return;
+    const href = target.getAttribute("href") ?? "";
+    if (!href.startsWith("http")) return;
+
+    e.preventDefault();
+    navigator.clipboard.writeText(href).then(
+      () => showToast("Link copied"),
+      () => showToast("Copy failed — open DevTools console")
+    );
+  });
+})();
+
 let currentMap: maplibregl.Map | null = null;
 let currentRadius = 5;
 let currentDays = 30;
