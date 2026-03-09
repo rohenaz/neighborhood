@@ -4,6 +4,7 @@ import { buildFeatureCollection } from "../normalize.ts";
 import { fetchArcGIS } from "../sources/arcgis.ts";
 import { fetchFBI } from "../sources/fbi.ts";
 import { fetchNewsAsIncidents } from "../sources/news.ts";
+import { fetchSocrata } from "../sources/socrata.ts";
 import type {
   IncidentFeatureCollection,
   IncidentSource,
@@ -18,7 +19,7 @@ export interface GetIncidentsInput {
   days?: number; // default 30
 }
 
-const ALL_SOURCES: IncidentSource[] = ["arcgis", "fbi", "news"];
+const ALL_SOURCES: IncidentSource[] = ["arcgis", "fbi", "news", "socrata"];
 
 export async function getIncidents(
   input: GetIncidentsInput
@@ -43,6 +44,10 @@ export async function getIncidents(
     {
       source: "news" as const,
       fetch: () => fetchNewsAsIncidents(zipCode, lat, lng, coords.displayName),
+    },
+    {
+      source: "socrata" as const,
+      fetch: () => fetchSocrata(lat, lng, radius, days),
     },
   ];
   const sourceFetchers = allFetchers.filter((f) =>

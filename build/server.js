@@ -39155,8 +39155,450 @@ function computeTrend(incidents, days) {
   return "stable";
 }
 
+// src/sources/socrata.ts
+var KNOWN_DATASETS = [
+  {
+    domain: "data.cityofchicago.org",
+    id: "ijzp-q8t2",
+    name: "Chicago Crimes",
+    lat: 41.8781,
+    lng: -87.6298,
+    radiusMiles: 25
+  },
+  {
+    domain: "data.lacity.org",
+    id: "2nrs-mtv8",
+    name: "LA Crime Data",
+    lat: 34.0522,
+    lng: -118.2437,
+    radiusMiles: 30
+  },
+  {
+    domain: "data.sfgov.org",
+    id: "wg3w-h783",
+    name: "SF Police Incidents",
+    lat: 37.7749,
+    lng: -122.4194,
+    radiusMiles: 15
+  },
+  {
+    domain: "data.cityofnewyork.us",
+    id: "5uac-w243",
+    name: "NYC NYPD Complaints",
+    lat: 40.7128,
+    lng: -74.006,
+    radiusMiles: 25
+  },
+  {
+    domain: "www.dallasopendata.com",
+    id: "qv6i-rri7",
+    name: "Dallas Police Incidents",
+    lat: 32.7767,
+    lng: -96.797,
+    radiusMiles: 20
+  },
+  {
+    domain: "data.kcmo.org",
+    id: "kbzx-7ehe",
+    name: "KCPD Crime Data",
+    lat: 39.0997,
+    lng: -94.5786,
+    radiusMiles: 20
+  },
+  {
+    domain: "data.cincinnati-oh.gov",
+    id: "k59e-2pvf",
+    name: "Cincinnati Crime Incidents",
+    lat: 39.1031,
+    lng: -84.512,
+    radiusMiles: 15
+  },
+  {
+    domain: "data.oaklandca.gov",
+    id: "ym6k-rx7a",
+    name: "Oakland CrimeWatch",
+    lat: 37.8044,
+    lng: -122.2712,
+    radiusMiles: 12
+  },
+  {
+    domain: "data.brla.gov",
+    id: "fabb-cnnu",
+    name: "Baton Rouge Crime",
+    lat: 30.4515,
+    lng: -91.1871,
+    radiusMiles: 15
+  }
+];
+var DATE_PATTERNS = [
+  /^date[_\s]?(of[_\s]?)?report/i,
+  /^date[_\s]?(of[_\s]?)?occur/i,
+  /^date[_\s]?from/i,
+  /^incident[_\s]?date/i,
+  /^incident[_\s]?datetime/i,
+  /^reported[_\s]?date/i,
+  /^occurred[_\s]?date/i,
+  /^offense[_\s]?date/i,
+  /^createddateutc/i,
+  /^offensedateutc/i,
+  /^report[_\s]?date/i,
+  /^report[_\s]?datetime/i,
+  /^rpt[_\s]?dt$/i,
+  /^rpt[_\s]?date/i,
+  /^cmplnt[_\s]?fr[_\s]?dt/i,
+  /^date[_\s]?occ/i,
+  /^date$/i
+];
+var TYPE_PATTERNS = [
+  /^offense$/i,
+  /^offense[_\s]?type/i,
+  /^offense[_\s]?desc/i,
+  /^offense[_\s]?grouping/i,
+  /^offense[_\s]?category/i,
+  /^offense[_\s]?sub[_\s]?category/i,
+  /^crime[_\s]?type/i,
+  /^incident[_\s]?category/i,
+  /^incident[_\s]?type/i,
+  /^incident[_\s]?desc/i,
+  /^category$/i,
+  /^type$/i,
+  /^ucr[_\s]?desc/i,
+  /^ucr[_\s]?group/i,
+  /^primary[_\s]?type/i,
+  /^primary[_\s]?desc/i,
+  /^_primary[_\s]?desc/i,
+  /^crime[_\s]?category/i,
+  /^charge[_\s]?desc/i,
+  /^nibrs[_\s]?offense/i,
+  /^crm[_\s]?cd[_\s]?desc/i,
+  /^ofns[_\s]?desc/i,
+  /^pd[_\s]?desc/i,
+  /^law[_\s]?cat[_\s]?cd/i,
+  /^description$/i
+];
+var ADDRESS_PATTERNS = [
+  /^address$/i,
+  /^block[_\s]?address/i,
+  /^street[_\s]?address/i,
+  /^incident[_\s]?address/i,
+  /^block$/i,
+  /^hundred_block$/i,
+  /^streetblock/i,
+  /^streetname/i,
+  /^street$/i,
+  /^address_x$/i,
+  /^location[_\s]?desc/i,
+  /^location_description$/i
+];
+var LAT_PATTERNS = [
+  /^latitude$/i,
+  /^lat$/i,
+  /^latitude_x$/i,
+  /^geo[_\s]?lat/i,
+  /^mapped[_\s]?lat/i
+];
+var LNG_PATTERNS = [
+  /^longitude$/i,
+  /^lng$/i,
+  /^lon$/i,
+  /^longitude_x$/i,
+  /^geo[_\s]?lon/i,
+  /^mapped[_\s]?lon/i
+];
+var POINT_PATTERNS = [
+  /^location$/i,
+  /^geocoded[_\s]?column/i,
+  /^point$/i,
+  /^geo[_\s]?location/i,
+  /^the[_\s]?geom$/i,
+  /^coordinates$/i,
+  /^mapping[_\s]?location$/i,
+  /^location_1$/i,
+  /^geomcoordinate$/i
+];
+var GEO_DATATYPES = new Set(["Point", "Location", "point", "location"]);
+function matchColumn(columns, patterns) {
+  for (const pattern of patterns) {
+    const match2 = columns.find((c) => pattern.test(c));
+    if (match2)
+      return match2;
+  }
+  return;
+}
+function matchPointColumn(columns, datatypes) {
+  for (const pattern of POINT_PATTERNS) {
+    const idx = columns.findIndex((c) => pattern.test(c));
+    if (idx !== -1 && datatypes[idx] && GEO_DATATYPES.has(datatypes[idx])) {
+      return columns[idx];
+    }
+  }
+  return;
+}
+function hasRequiredColumns(columns, datatypes) {
+  const hasDate = matchColumn(columns, DATE_PATTERNS) !== undefined;
+  const hasType = matchColumn(columns, TYPE_PATTERNS) !== undefined;
+  const hasLat = matchColumn(columns, LAT_PATTERNS) !== undefined;
+  const hasLng = matchColumn(columns, LNG_PATTERNS) !== undefined;
+  const hasPoint = matchPointColumn(columns, datatypes) !== undefined;
+  const hasGeo = hasLat && hasLng || hasPoint;
+  return hasDate && hasType && hasGeo;
+}
+function haversineDistance2(lat1, lng1, lat2, lng2) {
+  const R2 = 3959;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a2 = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R2 * 2 * Math.atan2(Math.sqrt(a2), Math.sqrt(1 - a2));
+}
+function findKnownDatasets(lat, lng) {
+  return KNOWN_DATASETS.filter((d2) => haversineDistance2(lat, lng, d2.lat, d2.lng) <= d2.radiusMiles).map((d2) => ({
+    domain: d2.domain,
+    id: d2.id,
+    name: d2.name,
+    columns: [],
+    datatypes: []
+  }));
+}
+async function fetchDatasetMetadata(dataset) {
+  if (dataset.columns.length > 0)
+    return dataset;
+  const url2 = `https://${dataset.domain}/api/views/${dataset.id}.json`;
+  const response = await fetch(url2, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "neighborhood-mcp/1.0"
+    },
+    signal: AbortSignal.timeout(1e4)
+  });
+  if (!response.ok)
+    return null;
+  const meta3 = await response.json();
+  if (!meta3.columns?.length)
+    return null;
+  return {
+    ...dataset,
+    columns: meta3.columns.map((c) => c.fieldName),
+    datatypes: meta3.columns.map((c) => c.dataTypeName)
+  };
+}
+async function discoverCatalogDatasets() {
+  const searches = [
+    "crime incidents",
+    "police incidents",
+    "crime reports"
+  ];
+  const results = await Promise.allSettled(searches.map(async (q2) => {
+    const params = new URLSearchParams({
+      q: q2,
+      categories: "Public Safety",
+      only: "datasets",
+      limit: "15"
+    });
+    const url2 = `https://api.us.socrata.com/api/catalog/v1?${params}`;
+    const response = await fetch(url2, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "neighborhood-mcp/1.0"
+      },
+      signal: AbortSignal.timeout(1e4)
+    });
+    if (!response.ok)
+      return [];
+    const data = await response.json();
+    return data.results ?? [];
+  }));
+  const seen = new Set;
+  const datasets = [];
+  for (const result of results) {
+    if (result.status !== "fulfilled")
+      continue;
+    for (const r of result.value) {
+      if (seen.has(r.resource.id))
+        continue;
+      seen.add(r.resource.id);
+      if (!r.resource.columns_field_name?.length)
+        continue;
+      if (!hasRequiredColumns(r.resource.columns_field_name, r.resource.columns_datatype ?? []))
+        continue;
+      datasets.push({
+        domain: r.metadata.domain,
+        id: r.resource.id,
+        name: r.resource.name,
+        columns: r.resource.columns_field_name,
+        datatypes: r.resource.columns_datatype ?? []
+      });
+    }
+  }
+  return datasets;
+}
+function parseDate(value) {
+  if (!value)
+    return null;
+  const str = String(value);
+  const d2 = new Date(str);
+  if (Number.isNaN(d2.getTime()))
+    return null;
+  return d2.toISOString();
+}
+function extractCoords(record3, latCol, lngCol, pointCol) {
+  if (latCol && lngCol) {
+    const lat = Number(record3[latCol]);
+    const lng = Number(record3[lngCol]);
+    if (isFinite(lat) && isFinite(lng) && lat !== 0 && lng !== 0) {
+      return { lat, lng };
+    }
+  }
+  if (pointCol) {
+    const point = record3[pointCol];
+    if (point && typeof point === "object") {
+      const p2 = point;
+      const lat = Number(p2.latitude ?? p2.lat);
+      const lng = Number(p2.longitude ?? p2.lng ?? p2.lon);
+      if (isFinite(lat) && isFinite(lng) && lat !== 0 && lng !== 0) {
+        return { lat, lng };
+      }
+      if (Array.isArray(p2.coordinates) && p2.coordinates.length >= 2) {
+        const cLng = Number(p2.coordinates[0]);
+        const cLat = Number(p2.coordinates[1]);
+        if (isFinite(cLat) && isFinite(cLng) && cLat !== 0 && cLng !== 0) {
+          return { lat: cLat, lng: cLng };
+        }
+      }
+    }
+  }
+  return null;
+}
+function isTextColumn(dataset, colName) {
+  const idx = dataset.columns.indexOf(colName);
+  if (idx === -1)
+    return false;
+  const dtype = dataset.datatypes[idx];
+  return dtype === "Text" || dtype === "text";
+}
+async function queryDataset(dataset, bbox, days) {
+  const { domain: domain2, id, columns, datatypes } = dataset;
+  const latCol = matchColumn(columns, LAT_PATTERNS);
+  const lngCol = matchColumn(columns, LNG_PATTERNS);
+  const pointCol = matchPointColumn(columns, datatypes);
+  const dateCol = matchColumn(columns, DATE_PATTERNS);
+  const typeCol = matchColumn(columns, TYPE_PATTERNS);
+  const addressCol = matchColumn(columns, ADDRESS_PATTERNS);
+  if (!dateCol || !typeCol)
+    return [];
+  if (!latCol && !lngCol && !pointCol)
+    return [];
+  const cutoff = new Date;
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffStr = cutoff.toISOString().slice(0, 19);
+  const whereClauses = [];
+  whereClauses.push(`${dateCol} > '${cutoffStr}'`);
+  if (pointCol) {
+    const latSpan = bbox.maxLat - bbox.minLat;
+    const lngSpan = bbox.maxLng - bbox.minLng;
+    const centerLat = (bbox.minLat + bbox.maxLat) / 2;
+    const centerLng = (bbox.minLng + bbox.maxLng) / 2;
+    const radiusMeters = Math.max(latSpan, lngSpan) * 111000 / 2;
+    whereClauses.push(`within_circle(${pointCol}, ${centerLat}, ${centerLng}, ${radiusMeters})`);
+  } else if (latCol && lngCol) {
+    if (!isTextColumn(dataset, latCol) && !isTextColumn(dataset, lngCol)) {
+      whereClauses.push(`${latCol} > ${bbox.minLat} AND ${latCol} < ${bbox.maxLat} AND ${lngCol} > ${bbox.minLng} AND ${lngCol} < ${bbox.maxLng}`);
+    }
+  }
+  const params = new URLSearchParams({
+    $where: whereClauses.join(" AND "),
+    $limit: "200",
+    $order: `${dateCol} DESC`
+  });
+  const url2 = `https://${domain2}/resource/${id}.json?${params}`;
+  const response = await fetch(url2, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "neighborhood-mcp/1.0"
+    },
+    signal: AbortSignal.timeout(15000)
+  });
+  if (!response.ok) {
+    if (response.status === 400 || response.status === 401 || response.status === 403 || response.status === 404 || response.status === 429) {
+      return [];
+    }
+    throw new Error(`Socrata ${dataset.name} (${domain2}) error: HTTP ${response.status}`);
+  }
+  const records = await response.json();
+  if (!Array.isArray(records) || records.length === 0)
+    return [];
+  const prefix = `soc-${id}`;
+  const results = [];
+  for (let i = 0;i < records.length; i++) {
+    const record3 = records[i];
+    if (!record3)
+      continue;
+    const coords = extractCoords(record3, latCol, lngCol, pointCol);
+    if (!coords)
+      continue;
+    if (coords.lat < bbox.minLat || coords.lat > bbox.maxLat || coords.lng < bbox.minLng || coords.lng > bbox.maxLng) {
+      continue;
+    }
+    const date6 = parseDate(record3[dateCol]);
+    if (!date6)
+      continue;
+    const type = record3[typeCol] ? String(record3[typeCol]).trim() : "Other";
+    const address = addressCol && record3[addressCol] ? String(record3[addressCol]).trim() : "Unknown";
+    results.push({
+      source: "socrata",
+      id: `${prefix}-${i}`,
+      type,
+      description: `${type} at ${address}`,
+      date: date6,
+      address,
+      lat: coords.lat,
+      lng: coords.lng
+    });
+  }
+  return results;
+}
+async function fetchSocrata(lat, lng, radiusMiles, days) {
+  const bbox = buildBoundingBox(lat, lng, radiusMiles);
+  const knownDatasets = findKnownDatasets(lat, lng);
+  const [catalogDatasets, ...knownWithMeta] = await Promise.all([
+    discoverCatalogDatasets().catch(() => []),
+    ...knownDatasets.map((ds) => fetchDatasetMetadata(ds))
+  ]);
+  const seen = new Set;
+  const allDatasets = [];
+  for (const ds of knownWithMeta) {
+    if (!ds)
+      continue;
+    seen.add(ds.id);
+    allDatasets.push(ds);
+  }
+  for (const ds of catalogDatasets) {
+    if (seen.has(ds.id))
+      continue;
+    seen.add(ds.id);
+    allDatasets.push(ds);
+  }
+  if (allDatasets.length === 0) {
+    return [];
+  }
+  const toQuery = allDatasets.slice(0, 8);
+  const results = await Promise.allSettled(toQuery.map((ds) => queryDataset(ds, bbox, days)));
+  const incidents = [];
+  const errors3 = [];
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      incidents.push(...result.value);
+    } else {
+      errors3.push(result.reason instanceof Error ? result.reason.message : String(result.reason));
+    }
+  }
+  if (incidents.length === 0 && errors3.length > 0 && knownDatasets.length > 0) {
+    throw new Error(`All Socrata datasets failed: ${errors3.slice(0, 3).join("; ")}`);
+  }
+  return incidents;
+}
+
 // src/tools/get-incidents.ts
-var ALL_SOURCES = ["arcgis", "fbi", "news"];
+var ALL_SOURCES = ["arcgis", "fbi", "news", "socrata"];
 async function getIncidents(input) {
   const { zipCode, radius = 5, days = 30 } = input;
   const enabledSources = input.sources ?? ALL_SOURCES;
@@ -39174,6 +39616,10 @@ async function getIncidents(input) {
     {
       source: "news",
       fetch: () => fetchNewsAsIncidents(zipCode, lat, lng, coords.displayName)
+    },
+    {
+      source: "socrata",
+      fetch: () => fetchSocrata(lat, lng, radius, days)
     }
   ];
   const sourceFetchers = allFetchers.filter((f2) => enabledSources.includes(f2.source));
@@ -39281,6 +39727,15 @@ var SOURCE_METADATA = [
     requiresApiKey: false,
     unlocks: "Local crime news headlines and alerts from RSS feeds",
     testUrl: "https://news.google.com/rss/search?q=crime"
+  },
+  {
+    name: "socrata",
+    label: "Socrata Open Data (SODA API)",
+    coverage: "Hundreds of US city police department open data portals with real-time crime incident data",
+    updateFrequency: "Varies by city — typically daily",
+    requiresApiKey: false,
+    unlocks: "Point-level crime incident data from city open data portals (Chicago, NYC, Austin, etc.)",
+    testUrl: "https://api.us.socrata.com/api/catalog/v1?limit=1"
   },
   {
     name: "fbi",

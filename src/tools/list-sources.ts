@@ -32,6 +32,17 @@ export const SOURCE_METADATA: SourceMeta[] = [
     testUrl: "https://news.google.com/rss/search?q=crime",
   },
   {
+    name: "socrata",
+    label: "Socrata Open Data (SODA API)",
+    coverage:
+      "Hundreds of US city police department open data portals with real-time crime incident data",
+    updateFrequency: "Varies by city — typically daily",
+    requiresApiKey: false,
+    unlocks:
+      "Point-level crime incident data from city open data portals (Chicago, NYC, Austin, etc.)",
+    testUrl: "https://api.us.socrata.com/api/catalog/v1?limit=1",
+  },
+  {
     name: "fbi",
     label: "FBI Crime Data Explorer",
     coverage: "National — NIBRS data for 18,000+ law enforcement agencies",
