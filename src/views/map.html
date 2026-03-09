@@ -365,13 +365,16 @@
       }
     }
 
-    // Connect to the MCP host and receive tool result data
+    // Connect to the MCP host and receive tool result data.
+    // Handlers MUST be registered before connect() to avoid missing notifications.
     const app = new App({ name: "neighborhood", version: "1.0.0" });
 
-    app.setNotificationHandler({ method: "notifications/tool-result" }, (notification) => {
-      const data = notification.params?.structuredContent;
+    // ontoolresult receives CallToolResult as params.
+    // structuredContent is a top-level field on CallToolResult.
+    app.ontoolresult = (params) => {
+      const data = params.structuredContent;
       if (data) renderMap(data);
-    });
+    };
 
     await app.connect();
   </script>

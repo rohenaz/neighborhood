@@ -223,17 +223,6 @@ registerAppResource(
   MAP_RESOURCE_URI,
   {
     description: "Interactive Leaflet crime map with dark theme",
-    _meta: {
-      ui: {
-        csp: {
-          resourceDomains: [
-            "https://unpkg.com",
-            "https://*.tile.openstreetmap.org",
-          ],
-          connectDomains: ["https://*.tile.openstreetmap.org"],
-        },
-      },
-    },
   },
   async () => {
     const viewPath = join(import.meta.dir, "views", "map.html");
@@ -244,6 +233,19 @@ registerAppResource(
           uri: MAP_RESOURCE_URI,
           mimeType: RESOURCE_MIME_TYPE,
           text: html,
+          // CSP must be on the content item — the listing-level _meta is only
+          // a static default and may be ignored by hosts.
+          _meta: {
+            ui: {
+              csp: {
+                resourceDomains: [
+                  "https://unpkg.com",
+                  "https://*.tile.openstreetmap.org",
+                ],
+                connectDomains: ["https://*.tile.openstreetmap.org"],
+              },
+            },
+          },
         },
       ],
     };
