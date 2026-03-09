@@ -224,8 +224,31 @@ let currentDataPayload: DataTablePayload | null = null;
 let dataFetched = false;
 
 // ── View tab state ────────────────────────────────────────────────────────────
-type ViewTab = "map" | "data";
+type ViewTab = "map" | "data" | "compare";
 let activeViewTab: ViewTab = "map";
+
+// ── Compare panel state ──────────────────────────────────────────────────────
+let compareZip = "";
+let compareFetched = false;
+
+interface ComparePayload {
+  zipA: CrimeStatsData;
+  zipB: CrimeStatsData;
+}
+
+interface CrimeStatsData {
+  zipCode: string;
+  days: number;
+  totalIncidents: number;
+  bySeverity: { high: number; medium: number; low: number };
+  topTypes: Array<{ type: string; count: number; percentage: number }>;
+  trend: "increasing" | "decreasing" | "stable" | "unknown";
+  bySource: Record<string, number>;
+  generatedAt: string;
+  sourceErrors: Array<{ source: string; error: string; timestamp: string }>;
+}
+
+let currentComparePayload: ComparePayload | null = null;
 
 // ── GeoJSON helpers ───────────────────────────────────────────────────────────
 function buildGeoJsonFeatures(
@@ -1045,33 +1068,48 @@ async function fetchDataPanel(zipCode: string, days: number): Promise<void> {
   }
 }
 
-// ── View tab switching (Map / Data) ───────────────────────────────────────────
+// ── View tab switching (Map / Data / Compare) ────────────────────────────────
 function switchViewTab(tab: ViewTab): void {
   activeViewTab = tab;
 
   const mapEl = document.getElementById("map");
   const legendEl = document.getElementById("legend");
   const dataPanelEl = document.getElementById("data-panel");
+  const comparePanelEl = document.getElementById("compare-panel");
   const mapTabBtn = document.getElementById("view-tab-map");
   const dataTabBtn = document.getElementById("view-tab-data");
+  const compareTabBtn = document.getElementById("view-tab-compare");
+
+  // Hide all panels
+  if (mapEl) mapEl.style.display = "none";
+  if (legendEl) legendEl.style.display = "none";
+  if (dataPanelEl) dataPanelEl.style.display = "none";
+  if (comparePanelEl) comparePanelEl.style.display = "none";
+
+  // Deactivate all tab buttons
+  if (mapTabBtn) mapTabBtn.classList.remove("active");
+  if (dataTabBtn) dataTabBtn.classList.remove("active");
+  if (compareTabBtn) compareTabBtn.classList.remove("active");
 
   if (tab === "map") {
     if (mapEl) mapEl.style.display = "block";
     if (legendEl) legendEl.style.display = "block";
-    if (dataPanelEl) dataPanelEl.style.display = "none";
     if (mapTabBtn) mapTabBtn.classList.add("active");
-    if (dataTabBtn) dataTabBtn.classList.remove("active");
-  } else {
-    if (mapEl) mapEl.style.display = "none";
-    if (legendEl) legendEl.style.display = "none";
+  } else if (tab === "data") {
     if (dataPanelEl) dataPanelEl.style.display = "flex";
-    if (mapTabBtn) mapTabBtn.classList.remove("active");
     if (dataTabBtn) dataTabBtn.classList.add("active");
 
     // Lazy-fetch data when switching to data tab for the first time
     if (!dataFetched && currentZip) {
       fetchDataPanel(currentZip, currentDays);
     }
+  } else if (tab === "compare") {
+    if (comparePanelEl) comparePanelEl.style.display = "flex";
+    if (compareTabBtn) compareTabBtn.classList.add("active");
+
+    // Update the primary ZIP label
+    const primaryZipEl = document.getElementById("compare-primary-zip");
+    if (primaryZipEl) primaryZipEl.textContent = currentZip;
   }
 }
 
@@ -1081,6 +1119,9 @@ document.getElementById("view-tab-map")?.addEventListener("click", () => {
 });
 document.getElementById("view-tab-data")?.addEventListener("click", () => {
   switchViewTab("data");
+});
+document.getElementById("view-tab-compare")?.addEventListener("click", () => {
+  switchViewTab("compare");
 });
 
 // ── Data panel internal tab switching (Statistics / News) ─────────────────────
@@ -1128,6 +1169,212 @@ dtFilterInput?.addEventListener("input", () => {
   dataFilterText = dtFilterInput.value;
   dataCurrentPage = 0;
   renderActiveDataTable();
+});
+
+// ── Compare panel: fetch + render ─────────────────────────────────────────────
+
+async function fetchComparison(
+  zipA: string,
+  zipB: string,
+  days: number
+): Promise<void> {
+  const inputArea = document.getElementById("compare-input-area");
+  const loadingEl = document.getElementById("compare-loading");
+  const contentEl = document.getElementById("compare-content");
+
+  if (inputArea) inputArea.style.display = "none";
+  if (loadingEl) loadingEl.style.display = "flex";
+  if (contentEl) contentEl.style.display = "none";
+
+  compareFetched = false;
+
+  const result = await app.callServerTool({
+    name: "compare_zips",
+    arguments: { zipA, zipB, days },
+  });
+
+  const data = result.structuredContent as ComparePayload | undefined;
+  if (data) {
+    currentComparePayload = data;
+    compareFetched = true;
+    renderComparison(data);
+  }
+}
+
+function deltaInfo(
+  a: number,
+  b: number
+): { text: string; cls: string } {
+  if (a === 0 && b === 0) return { text: "0%", cls: "compare-delta-same" };
+  if (a === 0) return { text: "+100%", cls: "compare-delta-worse" };
+  const pct = Math.round(((b - a) / a) * 100);
+  if (pct === 0) return { text: "0%", cls: "compare-delta-same" };
+  // For crime: more = worse, less = better
+  const sign = pct > 0 ? "+" : "";
+  const cls = pct > 0 ? "compare-delta-worse" : "compare-delta-better";
+  return { text: `${sign}${pct}%`, cls };
+}
+
+function compareBar(a: number, b: number): string {
+  const max = Math.max(a, b, 1);
+  const pctA = (a / max) * 100;
+  const pctB = (b / max) * 100;
+  return `
+    <div class="compare-bar-wrap">
+      <div class="compare-bar compare-bar-a" style="width:${pctA}%"></div>
+      <div class="compare-bar compare-bar-b" style="width:${pctB}%"></div>
+    </div>
+  `;
+}
+
+function renderComparison(data: ComparePayload): void {
+  const loadingEl = document.getElementById("compare-loading");
+  const contentEl = document.getElementById("compare-content");
+  const inputArea = document.getElementById("compare-input-area");
+
+  if (loadingEl) loadingEl.style.display = "none";
+  if (inputArea) inputArea.style.display = "none";
+  if (contentEl) contentEl.style.display = "flex";
+  if (!contentEl) return;
+
+  const { zipA, zipB } = data;
+  const totalDelta = deltaInfo(zipA.totalIncidents, zipB.totalIncidents);
+
+  // Merge top crime types from both zips
+  const typeMap = new Map<string, { a: number; b: number }>();
+  for (const t of zipA.topTypes) {
+    typeMap.set(t.type, { a: t.count, b: 0 });
+  }
+  for (const t of zipB.topTypes) {
+    const existing = typeMap.get(t.type);
+    if (existing) {
+      existing.b = t.count;
+    } else {
+      typeMap.set(t.type, { a: 0, b: t.count });
+    }
+  }
+  // Sort by total, take top 8
+  const topMerged = Array.from(typeMap.entries())
+    .sort(([, a], [, b]) => a.a + a.b - (b.a + b.b))
+    .reverse()
+    .slice(0, 8);
+
+  const typeRowsHtml = topMerged
+    .map(([type, counts]) => {
+      const d = deltaInfo(counts.a, counts.b);
+      return `
+        <div class="compare-row">
+          <div class="compare-label">${esc(type)}</div>
+          <div class="compare-values">
+            <span class="compare-value">${counts.a.toLocaleString()}</span>
+            ${compareBar(counts.a, counts.b)}
+            <span class="compare-value">${counts.b.toLocaleString()}</span>
+            <span class="compare-delta ${d.cls}">${d.text}</span>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  // Severity comparison
+  const sevKeys: Array<{ key: keyof typeof zipA.bySeverity; label: string }> = [
+    { key: "high", label: "High" },
+    { key: "medium", label: "Medium" },
+    { key: "low", label: "Low" },
+  ];
+  const sevRowsHtml = sevKeys
+    .map(({ key, label }) => {
+      const a = zipA.bySeverity[key];
+      const b = zipB.bySeverity[key];
+      const d = deltaInfo(a, b);
+      return `
+        <div class="compare-row">
+          <div class="compare-label">${label}</div>
+          <div class="compare-values">
+            <span class="compare-value">${a.toLocaleString()}</span>
+            ${compareBar(a, b)}
+            <span class="compare-value">${b.toLocaleString()}</span>
+            <span class="compare-delta ${d.cls}">${d.text}</span>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  // Trend comparison
+  const trendLabel = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+  contentEl.innerHTML = `
+    <div class="compare-header">
+      <span class="compare-zip-label"><span class="compare-zip-dot compare-zip-dot-a"></span>${esc(zipA.zipCode)}</span>
+      <span style="font-size:11px;color:var(--muted)">vs</span>
+      <span class="compare-zip-label"><span class="compare-zip-dot compare-zip-dot-b"></span>${esc(zipB.zipCode)}</span>
+    </div>
+
+    <div class="compare-card">
+      <div class="compare-card-title">Total Incidents</div>
+      <div class="compare-row">
+        <div class="compare-label">All types</div>
+        <div class="compare-values">
+          <span class="compare-value">${zipA.totalIncidents.toLocaleString()}</span>
+          ${compareBar(zipA.totalIncidents, zipB.totalIncidents)}
+          <span class="compare-value">${zipB.totalIncidents.toLocaleString()}</span>
+          <span class="compare-delta ${totalDelta.cls}">${totalDelta.text}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-card">
+      <div class="compare-card-title">Severity Breakdown</div>
+      ${sevRowsHtml}
+    </div>
+
+    <div class="compare-card">
+      <div class="compare-card-title">Top Crime Types</div>
+      ${typeRowsHtml}
+    </div>
+
+    <div class="compare-card">
+      <div class="compare-card-title">Trend</div>
+      <div class="compare-row">
+        <div class="compare-label">${esc(zipA.zipCode)}</div>
+        <div class="compare-values">${trendBadgeHtml(zipA.trend)}</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-label">${esc(zipB.zipCode)}</div>
+        <div class="compare-values">${trendBadgeHtml(zipB.trend)}</div>
+      </div>
+    </div>
+
+    <div style="text-align:center;padding:8px 0">
+      <button id="compare-change-btn" style="font-family:var(--font);font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;text-decoration:underline">Change ZIP</button>
+    </div>
+  `;
+
+  // Wire "Change ZIP" button
+  document.getElementById("compare-change-btn")?.addEventListener("click", () => {
+    if (contentEl) contentEl.style.display = "none";
+    const inputArea = document.getElementById("compare-input-area");
+    if (inputArea) inputArea.style.display = "flex";
+    const input = document.getElementById("compare-zip-input") as HTMLInputElement | null;
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  });
+}
+
+// Wire compare form
+const compareForm = document.getElementById("compare-form") as HTMLFormElement | null;
+const compareZipInput = document.getElementById("compare-zip-input") as HTMLInputElement | null;
+
+compareForm?.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const val = compareZipInput?.value.trim() ?? "";
+  if (!/^\d{5}$/.test(val)) return;
+  if (!currentZip) return;
+  compareZip = val;
+  fetchComparison(currentZip, compareZip, currentDays);
 });
 
 // ── MCP App connection ────────────────────────────────────────────────────────
@@ -1195,6 +1442,17 @@ async function submitZip(newZip: string) {
     renderMap(data);
     // Refresh data panel after zip change
     fetchDataPanel(trimmed, currentDays);
+    // Reset compare state
+    compareFetched = false;
+    currentComparePayload = null;
+    const compareInputArea = document.getElementById("compare-input-area");
+    const compareContent = document.getElementById("compare-content");
+    const compareLoading = document.getElementById("compare-loading");
+    if (compareInputArea) compareInputArea.style.display = "flex";
+    if (compareContent) compareContent.style.display = "none";
+    if (compareLoading) compareLoading.style.display = "none";
+    const primaryZipEl = document.getElementById("compare-primary-zip");
+    if (primaryZipEl) primaryZipEl.textContent = trimmed;
   }
 }
 

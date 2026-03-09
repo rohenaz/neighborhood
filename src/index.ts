@@ -445,6 +445,53 @@ function registerResources(server: McpServer) {
       };
     }
   );
+  // ---------------------------------------------------------------------------
+  // MCP App tool — compare crime stats between two ZIP codes
+  // ---------------------------------------------------------------------------
+
+  registerAppTool(
+    server,
+    "compare_zips",
+    {
+      title: "Compare ZIP Codes",
+      description:
+        "App-only tool: compares crime stats between two ZIP codes for the compare panel.",
+      inputSchema: {
+        zipA: z.string().min(5).max(10).describe("First ZIP code"),
+        zipB: z.string().min(5).max(10).describe("Second ZIP code"),
+        days: z
+          .number()
+          .int()
+          .positive()
+          .max(365)
+          .optional()
+          .default(30)
+          .describe("Number of days for trend analysis (default: 30)"),
+      },
+      _meta: {
+        ui: {
+          resourceUri: MAP_RESOURCE_URI,
+          visibility: ["app"],
+        },
+      },
+    },
+    async (args) => {
+      const [statsA, statsB] = await Promise.all([
+        getCrimeStats({ zipCode: args.zipA, days: args.days }),
+        getCrimeStats({ zipCode: args.zipB, days: args.days }),
+      ]);
+
+      return {
+        structuredContent: { zipA: statsA, zipB: statsB },
+        content: [
+          {
+            type: "text" as const,
+            text: `Comparison: ${args.zipA} (${statsA.totalIncidents} incidents) vs ${args.zipB} (${statsB.totalIncidents} incidents) over ${args.days}d`,
+          },
+        ],
+      };
+    }
+  );
 } // end registerResources
 
 // ---------------------------------------------------------------------------
