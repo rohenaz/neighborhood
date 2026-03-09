@@ -18,9 +18,12 @@ elif [[ -f "$HOME/.config/neighborhood/.env" ]]; then
   set +a
 fi
 
-# Use bun if available (local dev), fall back to node (Claude Desktop VM)
-if command -v bun >/dev/null 2>&1; then
+# Use bun + source TS if node_modules are present (local dev).
+# Otherwise use the pre-built Node.js bundle (plugin cache has no node_modules).
+if command -v bun >/dev/null 2>&1 && [[ -d "$SCRIPT_DIR/node_modules" ]]; then
   exec bun run "$SCRIPT_DIR/src/index.ts" --stdio
+elif command -v bun >/dev/null 2>&1; then
+  exec bun run "$SCRIPT_DIR/build/server.js" --stdio
 else
   exec node "$SCRIPT_DIR/build/server.js" --stdio
 fi
