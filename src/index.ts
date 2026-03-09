@@ -12,6 +12,9 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { z } from "zod";
 import { zipToCoordinates } from "./geocode.ts";
 import { getAlerts } from "./tools/get-alerts.ts";
@@ -21,30 +24,41 @@ import { listSources } from "./tools/list-sources.ts";
 import type { IncidentSource } from "./types.ts";
 
 // ---------------------------------------------------------------------------
-// Server setup — McpServer with MCP Apps support
+// Server factory — creates a fully-configured McpServer per connection.
+// Each transport needs its own McpServer instance; a single McpServer cannot
+// be shared across multiple transports.
 // ---------------------------------------------------------------------------
 
 const MAP_RESOURCE_URI = "ui://neighborhood/map.html";
 
-const server = new McpServer(
-  {
-    name: "neighborhood",
-    version: "1.0.0",
-  },
-  {
-    capabilities: {
-      resources: {},
-      tools: {},
-      experimental: {
-        "io.modelcontextprotocol/ui": { version: "0.1" },
-      },
+function createServer(): McpServer {
+  const srv = new McpServer(
+    {
+      name: "neighborhood",
+      version: "1.0.0",
     },
-  }
-);
+    {
+      capabilities: {
+        resources: {},
+        tools: {},
+        experimental: {
+          "io.modelcontextprotocol/ui": { version: "0.1" },
+        },
+      },
+    }
+  );
+
+  registerTools(srv);
+  registerResources(srv);
+
+  return srv;
+}
 
 // ---------------------------------------------------------------------------
 // Regular tools (text-based responses)
 // ---------------------------------------------------------------------------
+
+function registerTools(server: McpServer) {
 
 server.registerTool(
   "get_incidents",
@@ -162,9 +176,13 @@ server.registerTool(
   }
 );
 
+} // end registerTools
+
 // ---------------------------------------------------------------------------
-// MCP App tool — interactive crime map rendered inline
+// MCP App tool + resource — interactive crime map rendered inline
 // ---------------------------------------------------------------------------
+
+function registerResources(server: McpServer) {
 
 registerAppTool(
   server,
@@ -260,14 +278,62 @@ registerAppResource(
   }
 );
 
+} // end registerResources
+
 // ---------------------------------------------------------------------------
-// Start
+// Start — dual-mode: --stdio for CLI, HTTP for Desktop
 // ---------------------------------------------------------------------------
 
+const useStdio = process.argv.includes("--stdio");
+
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("neighborhood MCP server running on stdio");
+  if (useStdio) {
+    // Stdio: single long-lived server connected to one transport
+    const srv = createServer();
+    const transport = new StdioServerTransport();
+    await srv.connect(transport);
+    console.error("neighborhood MCP server running on stdio");
+    return;
+  }
+
+  const port = Number(process.env.PORT) || 3001;
+  const app = new Hono();
+
+  // Expose mcp-session-id so clients can read it from CORS responses
+  app.use(
+    "/*",
+    cors({
+      origin: "*",
+      allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
+      allowHeaders: [
+        "Content-Type",
+        "mcp-session-id",
+        "Last-Event-ID",
+        "mcp-protocol-version",
+      ],
+      exposeHeaders: ["mcp-session-id", "mcp-protocol-version"],
+    })
+  );
+
+  // Stateless mode: one McpServer + one transport per request.
+  // WebStandardStreamableHTTPServerTransport with sessionIdGenerator: undefined
+  // disables session management — the transport handles a single request/response
+  // cycle and cannot be reused. This avoids the multi-transport limitation of McpServer.
+  app.all("/mcp", async (c) => {
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined, // stateless — no session tracking
+      enableJsonResponse: true,      // return JSON instead of SSE for simpler clients
+    });
+    const srv = createServer();
+    await srv.connect(transport);
+    return transport.handleRequest(c.req.raw);
+  });
+
+  // Health check
+  app.get("/", (c) => c.json({ name: "neighborhood", status: "ok" }));
+
+  console.error(`neighborhood MCP server running on http://localhost:${port}/mcp`);
+  Bun.serve({ fetch: app.fetch, port });
 }
 
 main().catch((err) => {

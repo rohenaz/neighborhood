@@ -20,7 +20,7 @@ fi
 
 # Use bun if available (local dev), fall back to node (Claude Desktop VM)
 if command -v bun >/dev/null 2>&1; then
-  exec bun run "$SCRIPT_DIR/src/index.ts"
+  exec bun run "$SCRIPT_DIR/src/index.ts" --stdio
 else
-  exec node "$SCRIPT_DIR/build/server.js"
+  exec node "$SCRIPT_DIR/build/server.js" --stdio
 fi

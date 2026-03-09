@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "start": "bun run src/index.ts",
+    "start": "bun run src/index.ts --stdio",
+    "serve": "bun run src/index.ts",
     "dev": "bun --watch run src/index.ts",
     "build": "bun build src/index.ts --target=node --outfile=build/server.js && cp -r src/views build/views",
     "lint": "biome check src/",
@@ -14,6 +15,7 @@
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.2.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "hono": "^4.12.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
