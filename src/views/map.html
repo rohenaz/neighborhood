@@ -413,10 +413,6 @@
       min-height: 0;
       overflow: hidden;
     }
-    #data-panel.active {
-      display: flex;
-    }
-
     /* ── Badges ── */
     .badge {
       font-size: 10px;
@@ -433,11 +429,6 @@
     .badge-up      { background: var(--trend-up);        color: var(--trend-up-fg); }
     .badge-down    { background: var(--trend-down);      color: var(--trend-down-fg); }
     .badge-stable  { background: var(--trend-stable);    color: var(--trend-stable-fg); }
-
-    /* Popup badges (map) */
-    .badge-high-popup   { background: hsl(0 84% 15%);   color: hsl(0 84% 70%); }
-    .badge-medium-popup { background: hsl(24 94% 15%);  color: hsl(24 94% 70%); }
-    .badge-low-popup    { background: hsl(142 72% 12%); color: hsl(142 72% 65%); }
 
     /* ── Summary cards ── */
     .summary {
@@ -536,7 +527,7 @@
     .severity-bar-legend-dot-low    { background: var(--severity-low-bar); }
 
     /* ── Data sub-tabs (Statistics / News) ── */
-    .data-tabs {
+    .dt-tabs {
       display: flex;
       gap: 0;
       background: var(--card);
@@ -544,7 +535,7 @@
       padding: 0 14px;
       flex-shrink: 0;
     }
-    .data-tab {
+    .dt-tab {
       font-family: var(--font);
       font-size: 12px;
       font-weight: 500;
@@ -558,8 +549,8 @@
       margin-bottom: -1px;
       white-space: nowrap;
     }
-    .data-tab:hover { color: var(--card-fg); }
-    .data-tab.active {
+    .dt-tab:hover { color: var(--card-fg); }
+    .dt-tab.active {
       color: var(--card-fg);
       border-bottom-color: var(--accent);
     }
@@ -707,32 +698,6 @@
       min-width: 70px;
       text-align: center;
     }
-    .pagination-page-btn {
-      font-family: var(--font);
-      font-size: 11px;
-      width: 24px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: none;
-      color: var(--muted-fg);
-      border: 1px solid transparent;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background 0.12s, color 0.12s, border-color 0.12s;
-      font-variant-numeric: tabular-nums;
-    }
-    .pagination-page-btn:hover {
-      background: var(--table-row-hover);
-      color: var(--card-fg);
-    }
-    .pagination-page-btn.active {
-      background: var(--accent);
-      color: #fff;
-      border-color: var(--accent);
-    }
-
     /* ── Empty state ── */
     .empty-state {
       display: flex;
@@ -927,45 +892,48 @@
 
   <!-- Data panel -->
   <div id="data-panel">
+    <div id="dt-loading" style="display:flex;align-items:center;justify-content:center;flex:1;color:var(--muted-fg);font-size:14px">Loading data...</div>
+    <div id="dt-content" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden">
 
-    <div class="summary" id="summary">
-      <div class="summary-cards" id="summary-cards"></div>
+      <div class="summary" id="dt-summary">
+        <div class="summary-cards" id="dt-summary-cards"></div>
+      </div>
+
+      <div class="dt-tabs" role="tablist" id="dt-tabs">
+        <button class="dt-tab active" data-tab="stats" role="tab" aria-selected="true"  aria-controls="dt-stats-panel">Statistics</button>
+        <button class="dt-tab"        data-tab="news"  role="tab" aria-selected="false" aria-controls="dt-news-panel">News</button>
+      </div>
+
+      <div class="toolbar">
+        <input
+          type="text"
+          class="filter-input"
+          id="dt-filter"
+          placeholder="Filter..."
+          aria-label="Filter rows"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <span class="toolbar-count" id="dt-toolbar-count"></span>
+      </div>
+
+      <div class="table-container" id="dt-stats-panel" role="tabpanel" aria-labelledby="stats-tab">
+        <table aria-label="Crime statistics">
+          <thead id="dt-stats-head"></thead>
+          <tbody id="dt-stats-body"></tbody>
+        </table>
+      </div>
+
+      <div class="table-container" id="dt-news-panel" role="tabpanel" aria-labelledby="news-tab" style="display:none">
+        <table aria-label="News articles">
+          <thead id="dt-news-head"></thead>
+          <tbody id="dt-news-body"></tbody>
+        </table>
+      </div>
+
+      <div class="pagination" id="dt-pagination"></div>
+
     </div>
-
-    <div class="data-tabs" role="tablist" id="data-tabs">
-      <button class="data-tab active" data-tab="stats" role="tab" aria-selected="true"  aria-controls="stats-panel">Statistics</button>
-      <button class="data-tab"        data-tab="news"  role="tab" aria-selected="false" aria-controls="news-panel">News</button>
-    </div>
-
-    <div class="toolbar">
-      <input
-        type="text"
-        class="filter-input"
-        id="filter"
-        placeholder="Filter..."
-        aria-label="Filter rows"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      <span class="toolbar-count" id="toolbar-count"></span>
-    </div>
-
-    <div class="table-container" id="stats-panel" role="tabpanel" aria-labelledby="stats-tab">
-      <table aria-label="Crime statistics">
-        <thead id="stats-head"></thead>
-        <tbody id="stats-body"></tbody>
-      </table>
-    </div>
-
-    <div class="table-container" id="news-panel" role="tabpanel" aria-labelledby="news-tab" style="display:none">
-      <table aria-label="News articles">
-        <thead id="news-head"></thead>
-        <tbody id="news-body"></tbody>
-      </table>
-    </div>
-
-    <div class="pagination" id="pagination"></div>
-
   </div>
 
   <div class="link-toast" id="link-toast">Link copied</div>

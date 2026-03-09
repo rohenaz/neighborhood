@@ -671,7 +671,7 @@ function trendBadgeHtml(trend: DataTablePayload["trend"]): string {
       unknown: { label: "Unknown", cls: "badge-stable" },
     };
   const { label, cls } = map[trend];
-  return `<span class="dt-badge ${cls}">${label}</span>`;
+  return `<span class="badge ${cls}">${label}</span>`;
 }
 
 function sortedTypes(
@@ -708,8 +708,8 @@ function sortedNews(
 }
 
 function sortClass(col: string): string {
-  if (col !== dataSortCol) return "dt-sortable";
-  return `dt-sortable ${dataSortDir === "asc" ? "sort-asc" : "sort-desc"}`;
+  if (col !== dataSortCol) return "sortable";
+  return `sortable ${dataSortDir === "asc" ? "sort-asc" : "sort-desc"}`;
 }
 
 function sortIndicator(col: string): string {
@@ -745,9 +745,9 @@ function renderDataPagination(totalItems: number): void {
   const onLast = dataCurrentPage >= totalPages - 1;
 
   paginationEl.innerHTML = `
-    <button id="dt-prev-page" class="dt-pagination-btn" ${onFirst ? "disabled" : ""}>&larr; Prev</button>
-    <span class="dt-pagination-info">Page ${dataCurrentPage + 1} of ${totalPages}</span>
-    <button id="dt-next-page" class="dt-pagination-btn" ${onLast ? "disabled" : ""}>Next &rarr;</button>
+    <button id="dt-prev-page" class="pagination-btn" ${onFirst ? "disabled" : ""}>&larr; Prev</button>
+    <span class="pagination-info">Page ${dataCurrentPage + 1} of ${totalPages}</span>
+    <button id="dt-next-page" class="pagination-btn" ${onLast ? "disabled" : ""}>Next &rarr;</button>
   `;
 
   document.getElementById("dt-prev-page")?.addEventListener("click", () => {
@@ -780,7 +780,7 @@ function renderStatsTable(): void {
     </tr>
   `;
 
-  for (const th of headEl.querySelectorAll<HTMLElement>(".dt-sortable")) {
+  for (const th of headEl.querySelectorAll<HTMLElement>(".sortable")) {
     th.addEventListener("click", () => {
       const col = th.dataset.col ?? "count";
       if (col === dataSortCol) {
@@ -799,7 +799,7 @@ function renderStatsTable(): void {
 
   if (filtered.length === 0) {
     bodyEl.innerHTML = `
-      <tr><td colspan="3" class="dt-empty-state">
+      <tr><td colspan="3" class="empty-state">
         ${
           currentDataPayload.topTypes.length === 0
             ? "No crime statistics available. Set FBI_API_KEY for historical data."
@@ -820,8 +820,8 @@ function renderStatsTable(): void {
       (row) => `
       <tr>
         <td>${esc(row.type)}</td>
-        <td class="dt-num-cell">${row.count.toLocaleString()}</td>
-        <td class="dt-num-cell">${row.percentage.toFixed(1)}%</td>
+        <td class="num-cell">${row.count.toLocaleString()}</td>
+        <td class="num-cell">${row.percentage.toFixed(1)}%</td>
       </tr>
     `
     )
@@ -845,7 +845,7 @@ function renderNewsTable(): void {
     </tr>
   `;
 
-  for (const th of headEl.querySelectorAll<HTMLElement>(".dt-sortable")) {
+  for (const th of headEl.querySelectorAll<HTMLElement>(".sortable")) {
     th.addEventListener("click", () => {
       const col = th.dataset.col ?? "date";
       if (col === dataSortCol) {
@@ -864,7 +864,7 @@ function renderNewsTable(): void {
 
   if (filtered.length === 0) {
     bodyEl.innerHTML = `
-      <tr><td colspan="3" class="dt-empty-state">
+      <tr><td colspan="3" class="empty-state">
         ${
           currentDataPayload.alerts.length === 0
             ? "No crime news found for this area."
@@ -889,8 +889,8 @@ function renderNewsTable(): void {
       });
       return `
         <tr>
-          <td class="dt-date-cell">${esc(date)}</td>
-          <td><a href="${esc(row.url)}" target="_blank" rel="noopener noreferrer" class="dt-table-link">${esc(row.title)}</a></td>
+          <td class="date-cell">${esc(date)}</td>
+          <td><a href="${esc(row.url)}" target="_blank" rel="noopener noreferrer" class="table-link">${esc(row.title)}</a></td>
           <td>${esc(row.source)}</td>
         </tr>
       `;
@@ -934,34 +934,34 @@ function renderSummaryCards(data: DataTablePayload): void {
   const pctLow = total > 0 ? (data.bySeverity.low / total) * 100 : 0;
 
   cardsEl.innerHTML = `
-    <div class="dt-summary-card">
-      <div class="dt-summary-card-label">Total Incidents</div>
-      <div class="dt-summary-card-value">${data.totalIncidents.toLocaleString()}</div>
-      <div class="dt-summary-card-sub">${trendBadgeHtml(data.trend)}</div>
+    <div class="summary-card">
+      <div class="summary-card-label">Total Incidents</div>
+      <div class="summary-card-value">${data.totalIncidents.toLocaleString()}</div>
+      <div class="summary-card-sub">${trendBadgeHtml(data.trend)}</div>
     </div>
-    <div class="dt-summary-card">
-      <div class="dt-summary-card-label">High Severity</div>
-      <div class="dt-summary-card-value">${data.bySeverity.high.toLocaleString()}</div>
+    <div class="summary-card">
+      <div class="summary-card-label">High Severity</div>
+      <div class="summary-card-value">${data.bySeverity.high.toLocaleString()}</div>
     </div>
-    <div class="dt-summary-card">
-      <div class="dt-summary-card-label">Medium Severity</div>
-      <div class="dt-summary-card-value">${data.bySeverity.medium.toLocaleString()}</div>
+    <div class="summary-card">
+      <div class="summary-card-label">Medium Severity</div>
+      <div class="summary-card-value">${data.bySeverity.medium.toLocaleString()}</div>
     </div>
-    <div class="dt-summary-card">
-      <div class="dt-summary-card-label">Low Severity</div>
-      <div class="dt-summary-card-value">${data.bySeverity.low.toLocaleString()}</div>
+    <div class="summary-card">
+      <div class="summary-card-label">Low Severity</div>
+      <div class="summary-card-value">${data.bySeverity.low.toLocaleString()}</div>
     </div>
-    <div class="dt-severity-bar-wrap">
-      <div class="dt-severity-bar-label">Severity Distribution</div>
-      <div class="dt-severity-bar-track">
-        <div class="dt-severity-bar-segment dt-severity-bar-high" style="width:${pctHigh}%"></div>
-        <div class="dt-severity-bar-segment dt-severity-bar-medium" style="width:${pctMedium}%"></div>
-        <div class="dt-severity-bar-segment dt-severity-bar-low" style="width:${pctLow}%"></div>
+    <div class="severity-bar-wrap">
+      <div class="severity-bar-label">Severity Distribution</div>
+      <div class="severity-bar-track">
+        <div class="severity-bar-segment severity-bar-segment-high" style="width:${pctHigh}%"></div>
+        <div class="severity-bar-segment severity-bar-segment-medium" style="width:${pctMedium}%"></div>
+        <div class="severity-bar-segment severity-bar-segment-low" style="width:${pctLow}%"></div>
       </div>
-      <div class="dt-severity-bar-legend">
-        <div class="dt-severity-bar-legend-item"><span class="dt-severity-dot dt-severity-dot-high"></span>${data.bySeverity.high}</div>
-        <div class="dt-severity-bar-legend-item"><span class="dt-severity-dot dt-severity-dot-medium"></span>${data.bySeverity.medium}</div>
-        <div class="dt-severity-bar-legend-item"><span class="dt-severity-dot dt-severity-dot-low"></span>${data.bySeverity.low}</div>
+      <div class="severity-bar-legend">
+        <div class="severity-bar-legend-item"><span class="severity-bar-legend-dot severity-bar-legend-dot-high"></span>${data.bySeverity.high}</div>
+        <div class="severity-bar-legend-item"><span class="severity-bar-legend-dot severity-bar-legend-dot-medium"></span>${data.bySeverity.medium}</div>
+        <div class="severity-bar-legend-item"><span class="severity-bar-legend-dot severity-bar-legend-dot-low"></span>${data.bySeverity.low}</div>
       </div>
     </div>
   `;
@@ -1030,14 +1030,14 @@ function switchViewTab(tab: ViewTab): void {
     if (mapEl) mapEl.style.display = "block";
     if (legendEl) legendEl.style.display = "block";
     if (dataPanelEl) dataPanelEl.style.display = "none";
-    if (mapTabBtn) mapTabBtn.classList.add("view-tab-active");
-    if (dataTabBtn) dataTabBtn.classList.remove("view-tab-active");
+    if (mapTabBtn) mapTabBtn.classList.add("active");
+    if (dataTabBtn) dataTabBtn.classList.remove("active");
   } else {
     if (mapEl) mapEl.style.display = "none";
     if (legendEl) legendEl.style.display = "none";
     if (dataPanelEl) dataPanelEl.style.display = "flex";
-    if (mapTabBtn) mapTabBtn.classList.remove("view-tab-active");
-    if (dataTabBtn) dataTabBtn.classList.add("view-tab-active");
+    if (mapTabBtn) mapTabBtn.classList.remove("active");
+    if (dataTabBtn) dataTabBtn.classList.add("active");
 
     // Lazy-fetch data when switching to data tab for the first time
     if (!dataFetched && currentZip) {
@@ -1067,7 +1067,7 @@ function activateDataTab(tab: "stats" | "news"): void {
 
   const tabButtons = document.querySelectorAll<HTMLButtonElement>("#dt-tabs .dt-tab");
   for (const btn of tabButtons) {
-    btn.classList.toggle("dt-tab-active", btn.dataset.tab === tab);
+    btn.classList.toggle("active", btn.dataset.tab === tab);
     btn.setAttribute(
       "aria-selected",
       btn.dataset.tab === tab ? "true" : "false"
