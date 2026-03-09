@@ -37205,7 +37205,10 @@ var server = new McpServer({
 }, {
   capabilities: {
     resources: {},
-    tools: {}
+    tools: {},
+    experimental: {
+      "io.modelcontextprotocol/ui": { version: "0.1" }
+    }
   }
 });
 server.registerTool("get_incidents", {

@@ -35,6 +35,9 @@ const server = new McpServer(
     capabilities: {
       resources: {},
       tools: {},
+      experimental: {
+        "io.modelcontextprotocol/ui": { version: "0.1" },
+      },
     },
   }
 );
