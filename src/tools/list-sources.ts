@@ -43,6 +43,18 @@ export const SOURCE_METADATA: SourceMeta[] = [
     testUrl: "https://api.us.socrata.com/api/catalog/v1?limit=1",
   },
   {
+    name: "spotcrime",
+    label: "SpotCrime",
+    coverage:
+      "Nationwide US — aggregates police blotter data from 1,000+ agencies",
+    updateFrequency: "Daily",
+    requiresApiKey: false,
+    unlocks:
+      "Point-level crime incidents with type classification from police blotters",
+    testUrl:
+      "https://api.spotcrime.com/crimes.json?lat=0&lon=0&radius=0.01&key=This-api-key-is-for-2025-commercial-use-exclusively.Only-entities-with-a-Spotcrime-contract-May-use-this-key.Email-feedback-at-spotcrime.com.",
+  },
+  {
     name: "fbi",
     label: "FBI Crime Data Explorer",
     coverage: "National — NIBRS data for 18,000+ law enforcement agencies",

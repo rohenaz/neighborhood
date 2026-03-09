@@ -39790,8 +39790,101 @@ async function fetchSocrata(lat, lng, radiusMiles, days) {
   return incidents;
 }
 
+// src/sources/spotcrime.ts
+var API_KEY = "This-api-key-is-for-2025-commercial-use-exclusively.Only-entities-with-a-Spotcrime-contract-May-use-this-key.Email-feedback-at-spotcrime.com.";
+var SEVERITY_MAP = {
+  Shooting: "high",
+  Assault: "high",
+  Robbery: "high",
+  Burglary: "medium",
+  Arson: "medium",
+  Arrest: "low",
+  Theft: "low",
+  Vandalism: "low",
+  Other: "low"
+};
+function parseSeverity(type) {
+  return SEVERITY_MAP[type] ?? "low";
+}
+function parseSpotCrimeDate(dateStr) {
+  const match2 = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{2})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i);
+  if (!match2)
+    return null;
+  const [, month, day, year, hourStr, minute, ampm] = match2;
+  const fullYear = 2000 + Number(year);
+  let hour = Number(hourStr);
+  if (ampm?.toUpperCase() === "PM" && hour !== 12)
+    hour += 12;
+  if (ampm?.toUpperCase() === "AM" && hour === 12)
+    hour = 0;
+  const d2 = new Date(fullYear, Number(month) - 1, Number(day), hour, Number(minute));
+  if (Number.isNaN(d2.getTime()))
+    return null;
+  return d2.toISOString();
+}
+async function fetchWithRadius(lat, lng, radius) {
+  const params = new URLSearchParams({
+    lat: lat.toString(),
+    lon: lng.toString(),
+    radius: radius.toString(),
+    key: API_KEY
+  });
+  const url2 = `https://api.spotcrime.com/crimes.json?${params}`;
+  const response = await fetch(url2, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "neighborhood-mcp/1.0"
+    },
+    signal: AbortSignal.timeout(1e4)
+  });
+  if (!response.ok) {
+    throw new Error(`SpotCrime API error: HTTP ${response.status}`);
+  }
+  const data = await response.json();
+  return data.crimes ?? [];
+}
+async function fetchSpotCrime(lat, lng, radiusMiles, days) {
+  let radius = 0.02;
+  let crimes = [];
+  const maxAttempts = 5;
+  for (let attempt = 0;attempt < maxAttempts; attempt++) {
+    const effectiveRadius = Math.min(radius, radiusMiles);
+    crimes = await fetchWithRadius(lat, lng, effectiveRadius);
+    if (crimes.length >= 5 || effectiveRadius >= radiusMiles)
+      break;
+    radius *= 2;
+  }
+  const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
+  const prefix = `sc-${Date.now()}`;
+  const results = [];
+  for (const crime of crimes) {
+    const date6 = parseSpotCrimeDate(crime.date);
+    if (!date6)
+      continue;
+    if (new Date(date6).getTime() < cutoffMs)
+      continue;
+    if (typeof crime.lat !== "number" || typeof crime.lon !== "number" || crime.lat === 0 && crime.lon === 0) {
+      continue;
+    }
+    const type = crime.type || "Other";
+    results.push({
+      source: "spotcrime",
+      id: `${prefix}-${crime.cdid}`,
+      type,
+      description: `${type} at ${crime.address}`,
+      date: date6,
+      address: crime.address || "Unknown",
+      lat: crime.lat,
+      lng: crime.lon,
+      url: crime.link,
+      severity: parseSeverity(type)
+    });
+  }
+  return results;
+}
+
 // src/tools/get-incidents.ts
-var ALL_SOURCES = ["arcgis", "fbi", "news", "socrata"];
+var ALL_SOURCES = ["arcgis", "fbi", "news", "socrata", "spotcrime"];
 async function getIncidents(input) {
   const { zipCode, radius = 5, days = 30 } = input;
   const enabledSources = input.sources ?? ALL_SOURCES;
@@ -39813,6 +39906,10 @@ async function getIncidents(input) {
     {
       source: "socrata",
       fetch: () => fetchSocrata(lat, lng, radius, days)
+    },
+    {
+      source: "spotcrime",
+      fetch: () => fetchSpotCrime(lat, lng, radius, days)
     }
   ];
   const sourceFetchers = allFetchers.filter((f2) => enabledSources.includes(f2.source));
@@ -39929,6 +40026,15 @@ var SOURCE_METADATA = [
     requiresApiKey: false,
     unlocks: "Point-level crime incident data from city open data portals (Chicago, NYC, Austin, etc.)",
     testUrl: "https://api.us.socrata.com/api/catalog/v1?limit=1"
+  },
+  {
+    name: "spotcrime",
+    label: "SpotCrime",
+    coverage: "Nationwide US — aggregates police blotter data from 1,000+ agencies",
+    updateFrequency: "Daily",
+    requiresApiKey: false,
+    unlocks: "Point-level crime incidents with type classification from police blotters",
+    testUrl: "https://api.spotcrime.com/crimes.json?lat=0&lon=0&radius=0.01&key=This-api-key-is-for-2025-commercial-use-exclusively.Only-entities-with-a-Spotcrime-contract-May-use-this-key.Email-feedback-at-spotcrime.com."
   },
   {
     name: "fbi",
