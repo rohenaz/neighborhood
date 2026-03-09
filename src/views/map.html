@@ -98,6 +98,12 @@
       outline: none;
       caret-color: var(--accent);
     }
+    .location-label {
+      font-size: 12px;
+      color: var(--muted-fg);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
     .header .meta {
       font-size: 12px;
       color: var(--muted-fg);
@@ -1031,6 +1037,7 @@
 
   <div class="header" id="header" style="display:none">
     <h1 class="zip-display" id="zip"></h1>
+    <span class="location-label" id="location-label" style="display:none"></span>
     <form class="zip-form" id="zip-form" style="display:none">
       <input class="zip-input" id="zip-input" type="text" maxlength="10" pattern="[0-9]{5}" inputmode="numeric" placeholder="ZIP" />
     </form>

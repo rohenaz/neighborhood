@@ -26,19 +26,35 @@ const STATE_NAMES: Record<string, string> = {
   kansas: "KS", kentucky: "KY", louisiana: "LA", maine: "ME", maryland: "MD",
   massachusetts: "MA", michigan: "MI", minnesota: "MN", mississippi: "MS", missouri: "MO",
   montana: "MT", nebraska: "NE", nevada: "NV", "new hampshire": "NH", "new jersey": "NJ",
-  "new mexico": "NM", "new york": "NY", "north carolina": "NC", "north dakota": "ND", ohio: "OH",
+  "new mexico": "NM", "north carolina": "NC", "north dakota": "ND", ohio: "OH",
   oklahoma: "OK", oregon: "OR", pennsylvania: "PA", "rhode island": "RI", "south carolina": "SC",
   "south dakota": "SD", tennessee: "TN", texas: "TX", utah: "UT", vermont: "VT",
   virginia: "VA", washington: "WA", "west virginia": "WV", wisconsin: "WI", wyoming: "WY",
   "district of columbia": "DC", dc: "DC",
 };
 
+// State capital display names for context
+const STATE_CAPITALS: Record<string, string> = {
+  AL: "Montgomery", AK: "Juneau", AZ: "Phoenix", AR: "Little Rock", CA: "Sacramento",
+  CO: "Denver", CT: "Hartford", DE: "Dover", FL: "Tallahassee", GA: "Atlanta",
+  HI: "Honolulu", ID: "Boise", IL: "Springfield", IN: "Indianapolis", IA: "Des Moines",
+  KS: "Topeka", KY: "Frankfort", LA: "Baton Rouge", ME: "Augusta", MD: "Annapolis",
+  MA: "Boston", MI: "Lansing", MN: "Saint Paul", MS: "Jackson", MO: "Jefferson City",
+  MT: "Helena", NE: "Lincoln", NV: "Carson City", NH: "Concord", NJ: "Trenton",
+  NM: "Santa Fe", NY: "Albany", NC: "Raleigh", ND: "Bismarck", OH: "Columbus",
+  OK: "Oklahoma City", OR: "Salem", PA: "Harrisburg", RI: "Providence", SC: "Columbia",
+  SD: "Pierre", TN: "Nashville", TX: "Austin", UT: "Salt Lake City", VT: "Montpelier",
+  VA: "Richmond", WA: "Olympia", WV: "Charleston", WI: "Madison", WY: "Cheyenne",
+  DC: "Washington",
+};
+
 /**
  * Resolve a location string to a ZIP code.
- * Accepts: ZIP code, state abbreviation ("AL"), or state name ("Alabama").
- * Returns { zip, label } where label is a human-friendly description for state lookups.
+ * Accepts: ZIP code, state abbreviation ("AL"), state name ("Alabama"), or city name ("Birmingham, AL").
+ * Returns { zip, label } where label is a human-friendly description.
+ * For city names, falls back to Nominatim geocoding (async).
  */
-export function resolveLocation(input: string): { zip: string; label: string } | null {
+export function resolveLocationSync(input: string): { zip: string; label: string } | null {
   const trimmed = input.trim();
 
   // Already a ZIP code
@@ -49,17 +65,113 @@ export function resolveLocation(input: string): { zip: string; label: string } |
   // State abbreviation (case-insensitive)
   const upper = trimmed.toUpperCase();
   if (STATE_TO_ZIP[upper]) {
-    return { zip: STATE_TO_ZIP[upper], label: `${upper} (capital area)` };
+    const capital = STATE_CAPITALS[upper] ?? "";
+    return { zip: STATE_TO_ZIP[upper], label: `${capital}, ${upper}` };
   }
 
   // Full state name (case-insensitive)
   const lower = trimmed.toLowerCase();
   const abbr = STATE_NAMES[lower];
   if (abbr && STATE_TO_ZIP[abbr]) {
-    return { zip: STATE_TO_ZIP[abbr], label: `${abbr} (capital area)` };
+    const capital = STATE_CAPITALS[abbr] ?? "";
+    return { zip: STATE_TO_ZIP[abbr], label: `${capital}, ${abbr}` };
   }
 
   return null;
+}
+
+/**
+ * Resolve any location string to a ZIP code — tries local lookup first,
+ * then falls back to Nominatim for city/place names.
+ */
+export async function resolveLocation(input: string): Promise<{ zip: string; label: string } | null> {
+  // Try local (states + ZIP codes) first
+  const local = resolveLocationSync(input);
+  if (local) return local;
+
+  // Fall back to Nominatim free-text geocoding for city names
+  const trimmed = input.trim();
+  if (trimmed.length < 2) return null;
+
+  const cacheKey = `resolve:${trimmed.toLowerCase()}`;
+  const cached = geocodeCache.get(cacheKey);
+  if (cached) {
+    // We stored the resolved zip in displayName for cache reuse
+    return { zip: (cached as Coordinates & { resolvedZip?: string }).resolvedZip ?? "", label: cached.displayName ?? trimmed };
+  }
+
+  try {
+    // Step 1: Forward geocode to get coordinates
+    const searchUrl = new URL(`${NOMINATIM_BASE}/search`);
+    searchUrl.searchParams.set("q", `${trimmed}, United States`);
+    searchUrl.searchParams.set("format", "json");
+    searchUrl.searchParams.set("limit", "1");
+    searchUrl.searchParams.set("addressdetails", "1");
+
+    const searchResponse = await fetch(searchUrl.toString(), {
+      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+    });
+
+    if (!searchResponse.ok) return null;
+
+    const results = (await searchResponse.json()) as Array<NominatimResult & {
+      address?: { postcode?: string; city?: string; town?: string; state?: string; country_code?: string };
+    }>;
+    if (!results.length || !results[0]) return null;
+
+    const result = results[0];
+
+    // Only accept US results
+    if (result.address?.country_code && result.address.country_code !== "us") return null;
+
+    const city = result.address?.city ?? result.address?.town ?? trimmed;
+    const state = result.address?.state ?? "";
+
+    // If forward geocode returned a postcode, use it
+    let zip = result.address?.postcode;
+    if (zip && /^\d{5}/.test(zip)) {
+      zip = zip.slice(0, 5);
+    } else {
+      // Step 2: Reverse geocode the center point to get a ZIP
+      const lat = result.lat;
+      const lon = result.lon;
+      const reverseUrl = new URL(`${NOMINATIM_BASE}/reverse`);
+      reverseUrl.searchParams.set("lat", lat);
+      reverseUrl.searchParams.set("lon", lon);
+      reverseUrl.searchParams.set("format", "json");
+      reverseUrl.searchParams.set("addressdetails", "1");
+      reverseUrl.searchParams.set("zoom", "18");
+
+      const reverseResponse = await fetch(reverseUrl.toString(), {
+        headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+      });
+
+      if (!reverseResponse.ok) return null;
+
+      const reverseResult = (await reverseResponse.json()) as {
+        address?: { postcode?: string };
+      };
+
+      zip = reverseResult.address?.postcode;
+      if (!zip || !/^\d{5}/.test(zip)) return null;
+      zip = zip.slice(0, 5);
+    }
+
+    const label = state ? `${city}, ${state}` : city;
+
+    // Cache the result
+    const coords: Coordinates & { resolvedZip?: string } = {
+      lat: Number.parseFloat(result.lat),
+      lng: Number.parseFloat(result.lon),
+      displayName: label,
+      resolvedZip: zip,
+    };
+    geocodeCache.set(cacheKey, coords);
+
+    return { zip, label };
+  } catch {
+    return null;
+  }
 }
 
 interface NominatimResult {

@@ -118,6 +118,7 @@ interface ScannerFeed {
 
 interface MapData {
   zipCode: string;
+  locationLabel?: string;
   lat: number;
   lng: number;
   radius: number;
@@ -522,6 +523,16 @@ function renderMap(data: MapData): void {
   const zipEl = document.getElementById("zip") as HTMLElement | null;
   const metaEl = document.getElementById("meta");
   if (zipEl) zipEl.textContent = zipCode;
+  // Show location label (e.g. "Montgomery, AL") when resolved from state/city
+  const locationLabelEl = document.getElementById("location-label");
+  if (locationLabelEl) {
+    if (data.locationLabel) {
+      locationLabelEl.textContent = data.locationLabel;
+      locationLabelEl.style.display = "inline";
+    } else {
+      locationLabelEl.style.display = "none";
+    }
+  }
   if (metaEl) {
     metaEl.innerHTML = `
       <span><span class="stat">${features.length}</span> incidents</span>

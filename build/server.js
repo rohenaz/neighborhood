@@ -38354,7 +38354,6 @@ var STATE_NAMES = {
   "new hampshire": "NH",
   "new jersey": "NJ",
   "new mexico": "NM",
-  "new york": "NY",
   "north carolina": "NC",
   "north dakota": "ND",
   ohio: "OH",
@@ -38376,21 +38375,143 @@ var STATE_NAMES = {
   "district of columbia": "DC",
   dc: "DC"
 };
-function resolveLocation(input) {
+var STATE_CAPITALS = {
+  AL: "Montgomery",
+  AK: "Juneau",
+  AZ: "Phoenix",
+  AR: "Little Rock",
+  CA: "Sacramento",
+  CO: "Denver",
+  CT: "Hartford",
+  DE: "Dover",
+  FL: "Tallahassee",
+  GA: "Atlanta",
+  HI: "Honolulu",
+  ID: "Boise",
+  IL: "Springfield",
+  IN: "Indianapolis",
+  IA: "Des Moines",
+  KS: "Topeka",
+  KY: "Frankfort",
+  LA: "Baton Rouge",
+  ME: "Augusta",
+  MD: "Annapolis",
+  MA: "Boston",
+  MI: "Lansing",
+  MN: "Saint Paul",
+  MS: "Jackson",
+  MO: "Jefferson City",
+  MT: "Helena",
+  NE: "Lincoln",
+  NV: "Carson City",
+  NH: "Concord",
+  NJ: "Trenton",
+  NM: "Santa Fe",
+  NY: "Albany",
+  NC: "Raleigh",
+  ND: "Bismarck",
+  OH: "Columbus",
+  OK: "Oklahoma City",
+  OR: "Salem",
+  PA: "Harrisburg",
+  RI: "Providence",
+  SC: "Columbia",
+  SD: "Pierre",
+  TN: "Nashville",
+  TX: "Austin",
+  UT: "Salt Lake City",
+  VT: "Montpelier",
+  VA: "Richmond",
+  WA: "Olympia",
+  WV: "Charleston",
+  WI: "Madison",
+  WY: "Cheyenne",
+  DC: "Washington"
+};
+function resolveLocationSync(input) {
   const trimmed = input.trim();
   if (/^\d{5}$/.test(trimmed)) {
     return { zip: trimmed, label: trimmed };
   }
   const upper = trimmed.toUpperCase();
   if (STATE_TO_ZIP[upper]) {
-    return { zip: STATE_TO_ZIP[upper], label: `${upper} (capital area)` };
+    const capital = STATE_CAPITALS[upper] ?? "";
+    return { zip: STATE_TO_ZIP[upper], label: `${capital}, ${upper}` };
   }
   const lower = trimmed.toLowerCase();
   const abbr = STATE_NAMES[lower];
   if (abbr && STATE_TO_ZIP[abbr]) {
-    return { zip: STATE_TO_ZIP[abbr], label: `${abbr} (capital area)` };
+    const capital = STATE_CAPITALS[abbr] ?? "";
+    return { zip: STATE_TO_ZIP[abbr], label: `${capital}, ${abbr}` };
   }
   return null;
+}
+async function resolveLocation(input) {
+  const local = resolveLocationSync(input);
+  if (local)
+    return local;
+  const trimmed = input.trim();
+  if (trimmed.length < 2)
+    return null;
+  const cacheKey = `resolve:${trimmed.toLowerCase()}`;
+  const cached2 = geocodeCache.get(cacheKey);
+  if (cached2) {
+    return { zip: cached2.resolvedZip ?? "", label: cached2.displayName ?? trimmed };
+  }
+  try {
+    const searchUrl = new URL(`${NOMINATIM_BASE}/search`);
+    searchUrl.searchParams.set("q", `${trimmed}, United States`);
+    searchUrl.searchParams.set("format", "json");
+    searchUrl.searchParams.set("limit", "1");
+    searchUrl.searchParams.set("addressdetails", "1");
+    const searchResponse = await fetch(searchUrl.toString(), {
+      headers: { "User-Agent": USER_AGENT, Accept: "application/json" }
+    });
+    if (!searchResponse.ok)
+      return null;
+    const results = await searchResponse.json();
+    if (!results.length || !results[0])
+      return null;
+    const result = results[0];
+    if (result.address?.country_code && result.address.country_code !== "us")
+      return null;
+    const city = result.address?.city ?? result.address?.town ?? trimmed;
+    const state = result.address?.state ?? "";
+    let zip = result.address?.postcode;
+    if (zip && /^\d{5}/.test(zip)) {
+      zip = zip.slice(0, 5);
+    } else {
+      const lat = result.lat;
+      const lon = result.lon;
+      const reverseUrl = new URL(`${NOMINATIM_BASE}/reverse`);
+      reverseUrl.searchParams.set("lat", lat);
+      reverseUrl.searchParams.set("lon", lon);
+      reverseUrl.searchParams.set("format", "json");
+      reverseUrl.searchParams.set("addressdetails", "1");
+      reverseUrl.searchParams.set("zoom", "18");
+      const reverseResponse = await fetch(reverseUrl.toString(), {
+        headers: { "User-Agent": USER_AGENT, Accept: "application/json" }
+      });
+      if (!reverseResponse.ok)
+        return null;
+      const reverseResult = await reverseResponse.json();
+      zip = reverseResult.address?.postcode;
+      if (!zip || !/^\d{5}/.test(zip))
+        return null;
+      zip = zip.slice(0, 5);
+    }
+    const label = state ? `${city}, ${state}` : city;
+    const coords = {
+      lat: Number.parseFloat(result.lat),
+      lng: Number.parseFloat(result.lon),
+      displayName: label,
+      resolvedZip: zip
+    };
+    geocodeCache.set(cacheKey, coords);
+    return { zip, label };
+  } catch {
+    return null;
+  }
 }
 async function zipToCoordinates(zipCode) {
   const cacheKey = `zip:${zipCode}`;
@@ -40460,6 +40581,7 @@ function registerResources(server) {
     return {
       structuredContent: {
         zipCode: zip,
+        locationLabel: label !== zip ? label : undefined,
         radius: args.radius,
         days: args.days,
         lat: coords.lat,

@@ -334,6 +334,7 @@ function registerResources(server: McpServer) {
       return {
         structuredContent: {
           zipCode: zip,
+          locationLabel: label !== zip ? label : undefined,
           radius: args.radius,
           days: args.days,
           lat: coords.lat,
