@@ -38637,6 +38637,8 @@ async function discoverScannerFeeds(zipCode, _lat, _lng, displayName) {
 
 // src/sources/news.ts
 var GOOGLE_NEWS_RSS = (query) => `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+var BING_NEWS_RSS = (query) => `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss`;
+var CRIME_OR = "(crime OR arrest OR shooting OR robbery OR homicide OR police OR stabbing OR carjacking)";
 function parseRSSItems(xml, defaultSource) {
   const items = [];
   const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/g;
@@ -38706,7 +38708,17 @@ function isCrimeRelated(text, keywords) {
     "sentenced",
     "crash",
     "DUI",
-    "hit-and-run"
+    "hit-and-run",
+    "hit and run",
+    "safety",
+    "incident",
+    "stabbing",
+    "carjacking",
+    "gunshot",
+    "fire",
+    "missing",
+    "fugitive",
+    "pursuit"
   ];
   const allKeywords = keywords.length ? keywords : defaultKeywords;
   return allKeywords.some((kw) => lower.includes(kw.toLowerCase()));
@@ -38741,20 +38753,20 @@ async function fetchNewsAlerts(zipCode, keywords = [], locationName) {
       }
     }
   }
-  const queries = [`${zipCode} crime`];
+  const queries = [`${zipCode} ${CRIME_OR} when:30d`];
   if (cityName && stateName) {
-    queries.push(`${cityName} ${stateName} crime`);
+    queries.push(`${cityName} ${stateName} ${CRIME_OR} when:30d`);
   }
   if (countyName && stateName) {
-    queries.push(`${countyName} ${stateName} crime`);
+    queries.push(`${countyName} ${stateName} ${CRIME_OR} when:30d`);
   }
   if (queries.length === 1) {
-    queries.push(`${zipCode} police`);
+    queries.push(`${zipCode} (police OR safety OR incident) when:30d`);
   }
-  const feedUrls = queries.map((q2) => ({
-    url: GOOGLE_NEWS_RSS(q2),
-    source: "Google News"
-  }));
+  const feedUrls = [
+    ...queries.map((q2) => ({ url: GOOGLE_NEWS_RSS(q2), source: "Google News" })),
+    ...queries.map((q2) => ({ url: BING_NEWS_RSS(q2), source: "Bing News" }))
+  ];
   const results = await Promise.allSettled(feedUrls.map(({ url: url2, source }) => fetchFeed(url2, source)));
   const allItems = [];
   for (const result of results) {

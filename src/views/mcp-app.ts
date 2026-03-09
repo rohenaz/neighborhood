@@ -159,51 +159,51 @@ interface DataTablePayload {
   generatedAt: string;
 }
 
-// ── Link toast (must run before any dynamic content) ─────────────────────────
-// Intercept all external link clicks. The srcdoc iframe is sandboxed without
-// allow-popups, so target="_blank" silently fails. Copy the URL instead and
-// show a brief toast so the user can paste it elsewhere.
-(function setupLinkInterceptor() {
-  const toast = document.getElementById("link-toast") as HTMLElement | null;
+// ── Link copy helper ─────────────────────────────────────────────────────────
+// srcdoc iframes are sandboxed without allow-popups, so target="_blank" silently
+// fails. Copy the URL instead and show a brief toast.
+
+let _hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showToast(message: string) {
+  const toast = document.getElementById("link-toast");
   if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add("link-toast-visible");
+  if (_hideTimer !== null) clearTimeout(_hideTimer);
+  _hideTimer = setTimeout(() => {
+    toast.classList.remove("link-toast-visible");
+    _hideTimer = null;
+  }, 2000);
+}
 
-  let hideTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function showToast(message: string) {
-    if (!toast) return;
-    toast.textContent = message;
-    toast.classList.add("link-toast-visible");
-    if (hideTimer !== null) clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => {
-      toast.classList.remove("link-toast-visible");
-      hideTimer = null;
-    }, 2000);
+function copyLink(href: string): void {
+  // Clipboard API is blocked in sandboxed srcdoc iframes.
+  // Use execCommand fallback which works in more restrictive contexts.
+  const ta = document.createElement("textarea");
+  ta.value = href;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand("copy");
+    showToast("Link copied");
+  } catch {
+    showToast(href);
   }
+  document.body.removeChild(ta);
+}
 
-  document.addEventListener("click", (e) => {
-    const target = (e.target as Element).closest("a[href]") as HTMLAnchorElement | null;
-    if (!target) return;
-    const href = target.getAttribute("href") ?? "";
-    if (!href.startsWith("http")) return;
-
-    e.preventDefault();
-    // Clipboard API is blocked in sandboxed srcdoc iframes.
-    // Use execCommand fallback which works in more restrictive contexts.
-    const ta = document.createElement("textarea");
-    ta.value = href;
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-      document.execCommand("copy");
-      showToast("Link copied");
-    } catch {
-      showToast(href);
-    }
-    document.body.removeChild(ta);
-  });
-})();
+// Global interceptor for links outside MapLibre popups (data panel, etc.)
+document.addEventListener("click", (e) => {
+  const target = (e.target as Element).closest("a[href]") as HTMLAnchorElement | null;
+  if (!target) return;
+  const href = target.getAttribute("href") ?? "";
+  if (!href.startsWith("http")) return;
+  e.preventDefault();
+  copyLink(href);
+});
 
 // ── Map state ─────────────────────────────────────────────────────────────────
 let currentMap: maplibregl.Map | null = null;
@@ -429,10 +429,23 @@ function attachMapHandlers(
       </div>
     `;
 
-    new maplibregl.Popup({ maxWidth: "300px", anchor: "bottom" })
+    const popup = new maplibregl.Popup({ maxWidth: "300px", anchor: "bottom" })
       .setLngLat(coords)
       .setHTML(html)
       .addTo(map);
+
+    // Attach click handlers directly — document-level delegation doesn't
+    // reliably reach links inside MapLibre popup DOM.
+    const popupEl = popup.getElement();
+    if (popupEl) {
+      for (const link of popupEl.querySelectorAll<HTMLAnchorElement>("a[href]")) {
+        link.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          copyLink(link.getAttribute("href") ?? "");
+        });
+      }
+    }
   });
 
   map.on("click", "center-pin", () => {

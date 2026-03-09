@@ -1,10 +1,16 @@
 import type { NewsAlert } from "../types.ts";
 
 // RSS-based crime news aggregation
-// Sources: Google News RSS, Patch local news
+// Sources: Google News RSS, Bing News RSS
 
 const GOOGLE_NEWS_RSS = (query: string) =>
   `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+
+const BING_NEWS_RSS = (query: string) =>
+  `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss`;
+
+const CRIME_OR =
+  "(crime OR arrest OR shooting OR robbery OR homicide OR police OR stabbing OR carjacking)";
 
 // Patch.com feeds are generated dynamically per location — see fetchNewsAlerts
 
@@ -112,6 +118,16 @@ function isCrimeRelated(text: string, keywords: string[]): boolean {
     "crash",
     "DUI",
     "hit-and-run",
+    "hit and run",
+    "safety",
+    "incident",
+    "stabbing",
+    "carjacking",
+    "gunshot",
+    "fire",
+    "missing",
+    "fugitive",
+    "pursuit",
   ];
   const allKeywords = keywords.length ? keywords : defaultKeywords;
   return allKeywords.some((kw) => lower.includes(kw.toLowerCase()));
@@ -170,22 +186,22 @@ export async function fetchNewsAlerts(
     }
   }
 
-  const queries: string[] = [`${zipCode} crime`];
+  const queries: string[] = [`${zipCode} ${CRIME_OR} when:30d`];
   if (cityName && stateName) {
-    queries.push(`${cityName} ${stateName} crime`);
+    queries.push(`${cityName} ${stateName} ${CRIME_OR} when:30d`);
   }
   if (countyName && stateName) {
-    queries.push(`${countyName} ${stateName} crime`);
+    queries.push(`${countyName} ${stateName} ${CRIME_OR} when:30d`);
   }
   // Fallback if we couldn't parse location
   if (queries.length === 1) {
-    queries.push(`${zipCode} police`);
+    queries.push(`${zipCode} (police OR safety OR incident) when:30d`);
   }
 
-  const feedUrls: Array<{ url: string; source: string }> = queries.map((q) => ({
-    url: GOOGLE_NEWS_RSS(q),
-    source: "Google News",
-  }));
+  const feedUrls: Array<{ url: string; source: string }> = [
+    ...queries.map((q) => ({ url: GOOGLE_NEWS_RSS(q), source: "Google News" })),
+    ...queries.map((q) => ({ url: BING_NEWS_RSS(q), source: "Bing News" })),
+  ];
 
   const results = await Promise.allSettled(
     feedUrls.map(({ url, source }) => fetchFeed(url, source))
