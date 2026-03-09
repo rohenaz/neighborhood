@@ -38550,10 +38550,16 @@ async function scrapeCountyFeeds(countyId, countyName) {
   }
   const html = await resp.text();
   const feeds = [];
-  const btableMatch = html.match(/<table\s+class="btable"[^>]*>([\s\S]*?)<\/table>/i);
-  if (!btableMatch)
+  const btablePattern = /<table\s+class="btable"[^>]*>([\s\S]*?)<\/table>/gi;
+  let feedTableHtml = "";
+  for (const m2 of html.matchAll(btablePattern)) {
+    if (m2[1] && /\/listen\/feed\/\d+/.test(m2[1])) {
+      feedTableHtml = m2[1];
+      break;
+    }
+  }
+  if (!feedTableHtml)
     return feeds;
-  const feedTableHtml = btableMatch[1];
   const feedPattern = /<a\s+href="\/listen\/feed\/(\d+)"[^>]*>([\s\S]*?)<\/a>/gi;
   for (const match2 of feedTableHtml.matchAll(feedPattern)) {
     const feedId = match2[1];
