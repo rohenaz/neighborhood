@@ -17,6 +17,30 @@
       --accent: #3b82f6;
       --radius: 8px;
       --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
+
+      /* Data table extras */
+      --table-header-bg: #111113;
+      --table-row-hover: rgba(255, 255, 255, 0.03);
+      --table-row-alt: rgba(255, 255, 255, 0.015);
+
+      --severity-high: hsl(0 84% 15%);
+      --severity-high-fg: hsl(0 84% 70%);
+      --severity-high-bar: hsl(0 84% 50%);
+      --severity-medium: hsl(24 94% 15%);
+      --severity-medium-fg: hsl(24 94% 70%);
+      --severity-medium-bar: hsl(24 94% 55%);
+      --severity-low: hsl(142 72% 12%);
+      --severity-low-fg: hsl(142 72% 65%);
+      --severity-low-bar: hsl(142 72% 40%);
+
+      --trend-up: hsl(0 84% 15%);
+      --trend-up-fg: hsl(0 84% 70%);
+      --trend-down: hsl(142 72% 12%);
+      --trend-down-fg: hsl(142 72% 65%);
+      --trend-stable: hsl(0 0% 14%);
+      --trend-stable-fg: hsl(0 0% 55%);
+
+      --summary-card: #1c1c1f;
     }
 
     body {
@@ -27,42 +51,45 @@
       display: flex;
       flex-direction: column;
       -webkit-font-smoothing: antialiased;
+      overflow: hidden;
     }
 
+    /* ── Header ── */
     .header {
-      padding: 14px 20px;
+      padding: 8px 14px;
       background: var(--card);
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
       display: flex;
-      align-items: baseline;
-      gap: 16px;
+      align-items: center;
+      gap: 10px;
     }
     .zip-display {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       letter-spacing: -0.01em;
       white-space: nowrap;
       cursor: pointer;
-      padding: 2px 6px;
-      margin: -2px -6px;
+      padding: 2px 5px;
+      margin: -2px -5px;
       border-radius: 4px;
       border: 1px solid transparent;
       transition: border-color 0.15s, background 0.15s;
+      flex-shrink: 0;
     }
     .zip-display:hover {
       border-color: var(--border);
       background: var(--background);
     }
-    .zip-form { margin: 0; }
+    .zip-form { margin: 0; flex-shrink: 0; }
     .zip-input {
       font-family: var(--font);
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       letter-spacing: -0.01em;
       width: 72px;
-      padding: 2px 6px;
-      margin: -2px -6px;
+      padding: 2px 5px;
+      margin: -2px -5px;
       background: var(--background);
       color: var(--card-fg);
       border: 1px solid var(--accent);
@@ -71,10 +98,11 @@
       caret-color: var(--accent);
     }
     .header .meta {
-      font-size: 13px;
+      font-size: 12px;
       color: var(--muted-fg);
       display: flex;
-      gap: 12px;
+      gap: 10px;
+      flex-shrink: 0;
     }
     .header .meta span { white-space: nowrap; }
     .header .stat {
@@ -83,44 +111,38 @@
       font-weight: 500;
     }
 
-    #map { flex: 1; min-height: 400px; }
-
-    .legend {
-      position: absolute;
-      bottom: 24px;
-      right: 12px;
-      z-index: 1000;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 12px 14px;
-      max-height: 300px;
-      overflow-y: auto;
-      min-width: 150px;
-      backdrop-filter: blur(8px);
-    }
-    .legend h3 {
-      font-size: 11px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 10px;
-      color: var(--muted);
-    }
-    .legend-item {
-      display: flex;
+    /* ── View tab switcher (inline segmented control) ── */
+    .view-tabs {
+      display: inline-flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 6px;
-      font-size: 12px;
-      color: var(--muted-fg);
-    }
-    .legend-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px;
+      gap: 1px;
       flex-shrink: 0;
-      border: 1.5px solid var(--background);
+    }
+    .view-tab {
+      font-family: var(--font);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      padding: 3px 9px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background: none;
+      color: var(--muted-fg);
+      transition: background 0.12s, color 0.12s;
+      white-space: nowrap;
+      user-select: none;
+      line-height: 1.4;
+    }
+    .view-tab:hover { color: var(--card-fg); }
+    .view-tab.active {
+      background: var(--card);
+      color: var(--card-fg);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
     }
 
     .header-errors {
@@ -133,7 +155,7 @@
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      padding: 2px 8px;
+      padding: 2px 7px;
       border-radius: 9999px;
       background: hsl(24 94% 10%);
       border: 1px solid hsl(24 94% 20%);
@@ -341,7 +363,402 @@
       padding: 4px 0;
     }
 
-    /* Override MapLibre defaults (its CSS is inlined after ours by Vite) */
+    /* ── Map view ── */
+    #map { flex: 1; min-height: 0; }
+
+    /* ── Legend (map-only, absolute positioned) ── */
+    .legend {
+      position: absolute;
+      bottom: 24px;
+      right: 12px;
+      z-index: 1000;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      max-height: 300px;
+      overflow-y: auto;
+      min-width: 150px;
+      backdrop-filter: blur(8px);
+    }
+    .legend h3 {
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+      color: var(--muted);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: var(--muted-fg);
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      border: 1.5px solid var(--background);
+    }
+
+    /* ── Data panel ── */
+    #data-panel {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    #data-panel.active {
+      display: flex;
+    }
+
+    /* ── Badges ── */
+    .badge {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 1px 6px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+    }
+    .badge-high    { background: var(--severity-high);   color: var(--severity-high-fg); }
+    .badge-medium  { background: var(--severity-medium); color: var(--severity-medium-fg); }
+    .badge-low     { background: var(--severity-low);    color: var(--severity-low-fg); }
+    .badge-up      { background: var(--trend-up);        color: var(--trend-up-fg); }
+    .badge-down    { background: var(--trend-down);      color: var(--trend-down-fg); }
+    .badge-stable  { background: var(--trend-stable);    color: var(--trend-stable-fg); }
+
+    /* Popup badges (map) */
+    .badge-high-popup   { background: hsl(0 84% 15%);   color: hsl(0 84% 70%); }
+    .badge-medium-popup { background: hsl(24 94% 15%);  color: hsl(24 94% 70%); }
+    .badge-low-popup    { background: hsl(142 72% 12%); color: hsl(142 72% 65%); }
+
+    /* ── Summary cards ── */
+    .summary {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 14px;
+      flex-shrink: 0;
+    }
+    .summary-cards {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .summary-card {
+      background: var(--summary-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      min-width: 90px;
+      flex: 1;
+    }
+    .summary-card-label {
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .summary-card-value {
+      font-size: 20px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: var(--card-fg);
+    }
+    .summary-card-sub {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 4px;
+    }
+
+    /* Severity stacked bar */
+    .severity-bar-wrap {
+      flex: 1;
+      min-width: 160px;
+      background: var(--summary-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+    }
+    .severity-bar-label {
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .severity-bar-track {
+      height: 6px;
+      border-radius: 9999px;
+      background: var(--border);
+      overflow: hidden;
+      display: flex;
+    }
+    .severity-bar-segment {
+      height: 100%;
+      transition: width 0.4s ease;
+    }
+    .severity-bar-segment-high   { background: var(--severity-high-bar); }
+    .severity-bar-segment-medium { background: var(--severity-medium-bar); }
+    .severity-bar-segment-low    { background: var(--severity-low-bar); }
+    .severity-bar-legend {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .severity-bar-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: var(--muted-fg);
+    }
+    .severity-bar-legend-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .severity-bar-legend-dot-high   { background: var(--severity-high-bar); }
+    .severity-bar-legend-dot-medium { background: var(--severity-medium-bar); }
+    .severity-bar-legend-dot-low    { background: var(--severity-low-bar); }
+
+    /* ── Data sub-tabs (Statistics / News) ── */
+    .data-tabs {
+      display: flex;
+      gap: 0;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 14px;
+      flex-shrink: 0;
+    }
+    .data-tab {
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 8px 12px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted-fg);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      margin-bottom: -1px;
+      white-space: nowrap;
+    }
+    .data-tab:hover { color: var(--card-fg); }
+    .data-tab.active {
+      color: var(--card-fg);
+      border-bottom-color: var(--accent);
+    }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 14px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .filter-input {
+      font-family: var(--font);
+      font-size: 12px;
+      width: 100%;
+      max-width: 280px;
+      padding: 4px 9px;
+      background: var(--background);
+      color: var(--card-fg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      outline: none;
+      caret-color: var(--accent);
+      transition: border-color 0.15s;
+    }
+    .filter-input::placeholder { color: var(--muted); }
+    .filter-input:focus { border-color: var(--accent); }
+    .toolbar-count {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    /* ── Table container ── */
+    .table-container {
+      flex: 1;
+      overflow: auto;
+      min-height: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    th {
+      background: var(--table-header-bg);
+      color: var(--muted-fg);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 7px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      user-select: none;
+    }
+    th.sortable { cursor: pointer; }
+    th.sortable:hover { color: var(--card-fg); }
+    th .sort-arrow {
+      display: inline-block;
+      margin-left: 4px;
+      font-size: 9px;
+      opacity: 0.4;
+    }
+    th.sort-asc .sort-arrow,
+    th.sort-desc .sort-arrow { opacity: 1; color: var(--accent); }
+
+    td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      color: var(--card-fg);
+      vertical-align: middle;
+    }
+    td.muted { color: var(--muted-fg); }
+    td.mono {
+      font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+    td.num-cell {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    td.date-cell {
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    tr:nth-child(even) td { background: var(--table-row-alt); }
+    tr:hover td { background: var(--table-row-hover); }
+
+    a.table-link {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a.table-link:hover { text-decoration: underline; }
+
+    /* ── Pagination ── */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .pagination-btn {
+      font-family: var(--font);
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 10px;
+      background: var(--background);
+      color: var(--card-fg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .pagination-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .pagination-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .pagination-info {
+      font-size: 11px;
+      color: var(--muted-fg);
+      font-variant-numeric: tabular-nums;
+      min-width: 70px;
+      text-align: center;
+    }
+    .pagination-page-btn {
+      font-family: var(--font);
+      font-size: 11px;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      color: var(--muted-fg);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+      font-variant-numeric: tabular-nums;
+    }
+    .pagination-page-btn:hover {
+      background: var(--table-row-hover);
+      color: var(--card-fg);
+    }
+    .pagination-page-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+      text-align: center;
+      gap: 8px;
+    }
+    .empty-state-icon {
+      font-size: 28px;
+      opacity: 0.25;
+      line-height: 1;
+    }
+    .empty-state-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted-fg);
+    }
+    .empty-state-sub {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* ── MapLibre overrides ── */
     .maplibregl-popup-content {
       background: var(--card) !important;
       color: var(--card-fg) !important;
@@ -403,18 +820,7 @@
     }
     .popup-link:hover { text-decoration: underline; }
 
-    .badge {
-      font-size: 10px;
-      font-weight: 500;
-      padding: 1px 6px;
-      border-radius: 9999px;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-    }
-    .badge-high { background: hsl(0 84% 15%); color: hsl(0 84% 70%); }
-    .badge-medium { background: hsl(24 94% 15%); color: hsl(24 94% 70%); }
-    .badge-low { background: hsl(142 72% 12%); color: hsl(142 72% 65%); }
-
+    /* ── Light mode ── */
     @media (prefers-color-scheme: light) {
       :root {
         --background: #ffffff;
@@ -423,9 +829,33 @@
         --border: #e4e4e7;
         --muted: #a1a1aa;
         --muted-fg: #71717a;
+
+        --table-header-bg: #ececef;
+        --table-row-hover: rgba(0, 0, 0, 0.025);
+        --table-row-alt: rgba(0, 0, 0, 0.012);
+
+        --summary-card: #ffffff;
+
+        --severity-high: hsl(0 84% 94%);
+        --severity-high-fg: hsl(0 84% 35%);
+        --severity-medium: hsl(24 94% 93%);
+        --severity-medium-fg: hsl(24 94% 35%);
+        --severity-low: hsl(142 72% 92%);
+        --severity-low-fg: hsl(142 72% 28%);
+
+        --trend-up: hsl(0 84% 94%);
+        --trend-up-fg: hsl(0 84% 35%);
+        --trend-down: hsl(142 72% 92%);
+        --trend-down-fg: hsl(142 72% 28%);
+        --trend-stable: hsl(0 0% 91%);
+        --trend-stable-fg: hsl(0 0% 40%);
+      }
+      .view-tab.active {
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
       }
     }
 
+    /* ── Loading ── */
     .loading {
       display: flex;
       align-items: center;
@@ -435,6 +865,7 @@
       font-size: 14px;
     }
 
+    /* ── Link toast ── */
     .link-toast {
       position: fixed;
       bottom: 20px;
@@ -462,6 +893,7 @@
 </head>
 <body>
   <div class="loading" id="loading">Loading crime data...</div>
+
   <div class="header" id="header" style="display:none">
     <h1 class="zip-display" id="zip"></h1>
     <form class="zip-form" id="zip-form" style="display:none">
@@ -469,6 +901,13 @@
     </form>
     <div class="meta" id="meta"></div>
     <div class="header-errors" id="header-errors"></div>
+
+    <!-- Inline segmented tab switcher -->
+    <div class="view-tabs" id="view-tabs" role="tablist" aria-label="View">
+      <button class="view-tab active" id="view-tab-map"  data-view="map"  role="tab" aria-selected="true"  aria-controls="map">Map</button>
+      <button class="view-tab"        id="view-tab-data" data-view="data" role="tab" aria-selected="false" aria-controls="data-panel">Data</button>
+    </div>
+
     <div class="sources-wrapper">
       <span class="sources-indicator" id="sources-indicator"></span>
       <div class="sources-popover" id="sources-popover"></div>
@@ -478,11 +917,57 @@
       <div class="scanner-popover" id="scanner-popover"></div>
     </div>
   </div>
+
+  <!-- Map view -->
   <div id="map" style="display:none"></div>
   <div class="legend" id="legend" style="display:none">
     <h3>Crime Types</h3>
     <div id="legend-items"></div>
   </div>
+
+  <!-- Data panel -->
+  <div id="data-panel">
+
+    <div class="summary" id="summary">
+      <div class="summary-cards" id="summary-cards"></div>
+    </div>
+
+    <div class="data-tabs" role="tablist" id="data-tabs">
+      <button class="data-tab active" data-tab="stats" role="tab" aria-selected="true"  aria-controls="stats-panel">Statistics</button>
+      <button class="data-tab"        data-tab="news"  role="tab" aria-selected="false" aria-controls="news-panel">News</button>
+    </div>
+
+    <div class="toolbar">
+      <input
+        type="text"
+        class="filter-input"
+        id="filter"
+        placeholder="Filter..."
+        aria-label="Filter rows"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <span class="toolbar-count" id="toolbar-count"></span>
+    </div>
+
+    <div class="table-container" id="stats-panel" role="tabpanel" aria-labelledby="stats-tab">
+      <table aria-label="Crime statistics">
+        <thead id="stats-head"></thead>
+        <tbody id="stats-body"></tbody>
+      </table>
+    </div>
+
+    <div class="table-container" id="news-panel" role="tabpanel" aria-labelledby="news-tab" style="display:none">
+      <table aria-label="News articles">
+        <thead id="news-head"></thead>
+        <tbody id="news-body"></tbody>
+      </table>
+    </div>
+
+    <div class="pagination" id="pagination"></div>
+
+  </div>
+
   <div class="link-toast" id="link-toast">Link copied</div>
   <script type="module" src="./mcp-app.ts"></script>
 </body>

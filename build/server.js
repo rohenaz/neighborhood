@@ -6500,7 +6500,6 @@ var require_dist = __commonJS((exports, module) => {
 });
 
 // src/index.ts
-import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, join as join2 } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40190,7 +40189,6 @@ async function listSources() {
 // src/index.ts
 var __dirname2 = dirname(fileURLToPath(import.meta.url));
 var MAP_RESOURCE_URI = "ui://neighborhood/map.html";
-var DATA_TABLE_RESOURCE_URI = "ui://neighborhood/data-table";
 function createServer() {
   const srv = new McpServer({
     name: "neighborhood",
@@ -40324,10 +40322,7 @@ function registerResources(server) {
           hasApiKey: m2.requiresApiKey ? Boolean(m2.apiKeyEnvVar && process.env[m2.apiKeyEnvVar]) : true
         }))
       },
-      content: [{ type: "text", text: summary }],
-      _meta: {
-        viewUUID: randomUUID()
-      }
+      content: [{ type: "text", text: summary }]
     };
   });
   cD(server, "Crime Map View", MAP_RESOURCE_URI, {
@@ -40374,14 +40369,15 @@ function registerResources(server) {
   });
   ID(server, "get_crime_data", {
     title: "Crime Data Table",
-    description: "Renders an interactive statistics dashboard with crime trends and news. Use alongside get_map_html for complete picture.",
+    description: "App-only tool: fetches stats and alerts to populate the data panel in the map view. Not intended for direct model invocation.",
     inputSchema: {
       zipCode: exports_external.string().min(5).max(10).describe("US ZIP code"),
       days: exports_external.number().int().positive().max(365).optional().default(30).describe("Number of days for trend analysis (default: 30)")
     },
     _meta: {
       ui: {
-        resourceUri: DATA_TABLE_RESOURCE_URI
+        resourceUri: MAP_RESOURCE_URI,
+        visibility: ["app"]
       }
     }
   }, async (args) => {
@@ -40406,30 +40402,7 @@ function registerResources(server) {
         ],
         generatedAt: stats.generatedAt
       },
-      content: [{ type: "text", text: summary }],
-      _meta: {
-        viewUUID: randomUUID()
-      }
-    };
-  });
-  cD(server, "Crime Data Table View", DATA_TABLE_RESOURCE_URI, {
-    description: "Interactive crime statistics and alerts data table"
-  }, async () => {
-    const distPath = join2(__dirname2, "..", "dist", "data-table.html");
-    try {
-      await readFile(distPath, "utf-8");
-    } catch {
-      throw new Error(`Bundled view not found at ${distPath}. Run 'bun run build:view' first.`);
-    }
-    const html = await readFile(distPath, "utf-8");
-    return {
-      contents: [
-        {
-          uri: DATA_TABLE_RESOURCE_URI,
-          mimeType: AI,
-          text: html
-        }
-      ]
+      content: [{ type: "text", text: summary }]
     };
   });
 }

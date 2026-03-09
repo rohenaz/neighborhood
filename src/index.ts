@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,7 +37,6 @@ import type { IncidentSource } from "./types.ts";
 // ---------------------------------------------------------------------------
 
 const MAP_RESOURCE_URI = "ui://neighborhood/map.html";
-const DATA_TABLE_RESOURCE_URI = "ui://neighborhood/data-table";
 
 function createServer(): McpServer {
   const srv = new McpServer(
@@ -314,9 +312,6 @@ function registerResources(server: McpServer) {
           })),
         },
         content: [{ type: "text" as const, text: summary }],
-        _meta: {
-          viewUUID: randomUUID(),
-        },
       };
     }
   );
@@ -391,7 +386,7 @@ function registerResources(server: McpServer) {
     {
       title: "Crime Data Table",
       description:
-        "Renders an interactive statistics dashboard with crime trends and news. Use alongside get_map_html for complete picture.",
+        "App-only tool: fetches stats and alerts to populate the data panel in the map view. Not intended for direct model invocation.",
       inputSchema: {
         zipCode: z.string().min(5).max(10).describe("US ZIP code"),
         days: z
@@ -405,7 +400,8 @@ function registerResources(server: McpServer) {
       },
       _meta: {
         ui: {
-          resourceUri: DATA_TABLE_RESOURCE_URI,
+          resourceUri: MAP_RESOURCE_URI,
+          visibility: ["app"],
         },
       },
     },
@@ -434,41 +430,6 @@ function registerResources(server: McpServer) {
           generatedAt: stats.generatedAt,
         },
         content: [{ type: "text" as const, text: summary }],
-        _meta: {
-          viewUUID: randomUUID(),
-        },
-      };
-    }
-  );
-
-  // Register the View HTML resource that the data table tool references
-  registerAppResource(
-    server,
-    "Crime Data Table View",
-    DATA_TABLE_RESOURCE_URI,
-    {
-      description: "Interactive crime statistics and alerts data table",
-    },
-    async () => {
-      const distPath = join(__dirname, "..", "dist", "data-table.html");
-
-      try {
-        await readFile(distPath, "utf-8");
-      } catch {
-        throw new Error(
-          `Bundled view not found at ${distPath}. Run 'bun run build:view' first.`
-        );
-      }
-
-      const html = await readFile(distPath, "utf-8");
-      return {
-        contents: [
-          {
-            uri: DATA_TABLE_RESOURCE_URI,
-            mimeType: RESOURCE_MIME_TYPE,
-            text: html,
-          },
-        ],
       };
     }
   );

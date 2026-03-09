@@ -2,6 +2,7 @@ import { App } from "@modelcontextprotocol/ext-apps";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
+// ── Color palette ────────────────────────────────────────────────────────────
 const COLORS = {
   high: "#ef4444",
   medium: "#f97316",
@@ -36,12 +37,14 @@ function pinColor(type: string, severity: string | undefined): string {
   return COLORS.other;
 }
 
+// ── XSS helper ───────────────────────────────────────────────────────────────
 function esc(s: string): string {
   const div = document.createElement("div");
   div.textContent = s;
   return div.innerHTML;
 }
 
+// ── Map style ────────────────────────────────────────────────────────────────
 function getStyleUrl(mapboxToken?: string): string {
   const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   if (mapboxToken) {
@@ -79,6 +82,7 @@ function circlePolygon(
   };
 }
 
+// ── Types ─────────────────────────────────────────────────────────────────────
 interface Feature {
   geometry: { coordinates: [number, number] };
   properties: {
@@ -135,6 +139,27 @@ interface GeoJsonFeatureProps {
   address: string;
 }
 
+interface DataTablePayload {
+  zipCode: string;
+  days: number;
+  totalIncidents: number;
+  trend: "increasing" | "decreasing" | "stable" | "unknown";
+  bySeverity: { high: number; medium: number; low: number };
+  topTypes: Array<{ type: string; count: number; percentage: number }>;
+  bySource: Record<string, number>;
+  alerts: Array<{
+    title: string;
+    url: string;
+    publishedAt: string;
+    source: string;
+    description: string;
+    snippet: string;
+  }>;
+  sourceErrors: Array<{ source: string; error: string; timestamp: string }>;
+  generatedAt: string;
+}
+
+// ── Link toast (must run before any dynamic content) ─────────────────────────
 // Intercept all external link clicks. The srcdoc iframe is sandboxed without
 // allow-popups, so target="_blank" silently fails. Copy the URL instead and
 // show a brief toast so the user can paste it elsewhere.
@@ -180,13 +205,27 @@ interface GeoJsonFeatureProps {
   });
 })();
 
+// ── Map state ─────────────────────────────────────────────────────────────────
 let currentMap: maplibregl.Map | null = null;
 let currentRadius = 5;
 let currentDays = 30;
+let currentZip = "";
 
-/**
- * Build GeoJSON features array from incident features, enriched with display properties.
- */
+// ── Data panel state ──────────────────────────────────────────────────────────
+let dataActiveTab: "stats" | "news" = "stats";
+let dataFilterText = "";
+let dataSortCol = "count";
+let dataSortDir: "asc" | "desc" = "desc";
+let dataCurrentPage = 0;
+const DATA_PAGE_SIZE = 25;
+let currentDataPayload: DataTablePayload | null = null;
+let dataFetched = false;
+
+// ── View tab state ────────────────────────────────────────────────────────────
+type ViewTab = "map" | "data";
+let activeViewTab: ViewTab = "map";
+
+// ── GeoJSON helpers ───────────────────────────────────────────────────────────
 function buildGeoJsonFeatures(
   features: Feature[]
 ): GeoJSON.Feature<GeoJSON.Point, GeoJsonFeatureProps>[] {
@@ -212,9 +251,6 @@ function buildGeoJsonFeatures(
   });
 }
 
-/**
- * Add all map data sources and layers. Called on initial load and after style swap.
- */
 function addDataLayers(
   map: maplibregl.Map,
   geoJsonFeatures: GeoJSON.Feature<GeoJSON.Point, GeoJsonFeatureProps>[],
@@ -223,7 +259,6 @@ function addDataLayers(
   radius: number,
   zipCode: string
 ): void {
-  // Search area circle (fill + outline)
   const circleFeature = circlePolygon([lng, lat], radius);
   map.addSource("search-area", {
     type: "geojson",
@@ -249,7 +284,6 @@ function addDataLayers(
     },
   });
 
-  // Center pin marker
   map.addSource("center-pin", {
     type: "geojson",
     data: {
@@ -271,7 +305,6 @@ function addDataLayers(
     },
   });
 
-  // Incident clustering source
   map.addSource("incidents", {
     type: "geojson",
     data: {
@@ -283,7 +316,6 @@ function addDataLayers(
     clusterRadius: 50,
   });
 
-  // Cluster circles
   map.addLayer({
     id: "clusters",
     type: "circle",
@@ -311,7 +343,6 @@ function addDataLayers(
     },
   });
 
-  // Cluster count labels
   map.addLayer({
     id: "cluster-count",
     type: "symbol",
@@ -327,7 +358,6 @@ function addDataLayers(
     },
   });
 
-  // Individual (unclustered) points
   map.addLayer({
     id: "unclustered-point",
     type: "circle",
@@ -342,17 +372,11 @@ function addDataLayers(
   });
 }
 
-/**
- * Attach map interaction handlers (click cluster to expand, click point for popup).
- * Must be called once after layers are created; handlers survive style swaps because
- * we re-call addDataLayers which re-creates the layers, then this function re-binds.
- */
 function attachMapHandlers(
   map: maplibregl.Map,
   geoJsonFeatures: GeoJSON.Feature<GeoJSON.Point, GeoJsonFeatureProps>[],
   zipCode: string
 ): void {
-  // Expand cluster on click
   map.on("click", "clusters", (e) => {
     const features = map.queryRenderedFeatures(e.point, {
       layers: ["clusters"],
@@ -369,7 +393,6 @@ function attachMapHandlers(
     });
   });
 
-  // Popup on unclustered point click
   map.on("click", "unclustered-point", (e) => {
     const feature = e.features?.[0];
     if (!feature) return;
@@ -412,7 +435,6 @@ function attachMapHandlers(
       .addTo(map);
   });
 
-  // Popup on center pin click
   map.on("click", "center-pin", () => {
     const center = map.getCenter();
     new maplibregl.Popup({ anchor: "bottom" })
@@ -421,7 +443,6 @@ function attachMapHandlers(
       .addTo(map);
   });
 
-  // Pointer cursor on interactive layers
   for (const layer of ["clusters", "unclustered-point", "center-pin"]) {
     map.on("mouseenter", layer, () => {
       map.getCanvas().style.cursor = "pointer";
@@ -432,6 +453,7 @@ function attachMapHandlers(
   }
 }
 
+// ── Map render ────────────────────────────────────────────────────────────────
 function renderMap(data: MapData): void {
   const loadingEl = document.getElementById("loading");
   const headerEl = document.getElementById("header");
@@ -440,10 +462,13 @@ function renderMap(data: MapData): void {
 
   if (loadingEl) loadingEl.style.display = "none";
   if (headerEl) headerEl.style.display = "flex";
-  if (mapEl) mapEl.style.display = "block";
-  if (legendEl) legendEl.style.display = "block";
 
-  // Destroy previous map if re-rendering
+  // Only show map + legend if the map view tab is active
+  if (activeViewTab === "map") {
+    if (mapEl) mapEl.style.display = "block";
+    if (legendEl) legendEl.style.display = "block";
+  }
+
   if (currentMap) {
     currentMap.remove();
     currentMap = null;
@@ -453,6 +478,7 @@ function renderMap(data: MapData): void {
     data;
   currentRadius = radius;
   currentDays = days;
+  currentZip = zipCode;
   const sourceCount = new Set(features.map((f) => f.properties.source)).size;
 
   const zipEl = document.getElementById("zip") as HTMLElement | null;
@@ -467,7 +493,6 @@ function renderMap(data: MapData): void {
     `;
   }
 
-  // Error badges in header
   if (sourceErrors && sourceErrors.length > 0) {
     const errorsEl = document.getElementById("header-errors");
     if (errorsEl) {
@@ -480,7 +505,6 @@ function renderMap(data: MapData): void {
     }
   }
 
-  // Sources indicator
   if (sources && sources.length > 0) {
     const active = sources.filter((s) => s.hasApiKey).length;
     const total = sources.length;
@@ -522,7 +546,6 @@ function renderMap(data: MapData): void {
     }
   }
 
-  // Scanner feeds indicator
   const scannerFeeds = data.scannerFeeds;
   const scannerIndicator = document.getElementById("scanner-indicator");
   const scannerPopover = document.getElementById("scanner-popover");
@@ -583,10 +606,8 @@ function renderMap(data: MapData): void {
     }
   }
 
-  // Build enriched GeoJSON features
   const geoJsonFeatures = buildGeoJsonFeatures(features);
 
-  // Build legend from unique types before the map loads
   const typeColors = new Map<string, string>();
   for (const f of features) {
     const p = f.properties;
@@ -613,7 +634,6 @@ function renderMap(data: MapData): void {
     }
   }
 
-  // Initialize MapLibre map
   const map = new maplibregl.Map({
     container: "map",
     style: getStyleUrl(data.mapboxToken),
@@ -630,7 +650,6 @@ function renderMap(data: MapData): void {
     attachMapHandlers(map, geoJsonFeatures, zipCode);
   });
 
-  // Theme switching: swap style and re-add all sources/layers
   const mq = window.matchMedia("(prefers-color-scheme: dark)");
   mq.addEventListener("change", () => {
     map.setStyle(getStyleUrl(data.mapboxToken));
@@ -641,8 +660,448 @@ function renderMap(data: MapData): void {
   });
 }
 
-// Connect to the MCP host and receive tool result data.
-// Handlers MUST be registered before connect() to avoid missing notifications.
+// ── Data panel rendering ──────────────────────────────────────────────────────
+
+function trendBadgeHtml(trend: DataTablePayload["trend"]): string {
+  const map: Record<DataTablePayload["trend"], { label: string; cls: string }> =
+    {
+      increasing: { label: "Increasing", cls: "badge-up" },
+      decreasing: { label: "Decreasing", cls: "badge-down" },
+      stable: { label: "Stable", cls: "badge-stable" },
+      unknown: { label: "Unknown", cls: "badge-stable" },
+    };
+  const { label, cls } = map[trend];
+  return `<span class="dt-badge ${cls}">${label}</span>`;
+}
+
+function sortedTypes(
+  rows: DataTablePayload["topTypes"]
+): DataTablePayload["topTypes"] {
+  return [...rows].sort((a, b) => {
+    let cmp = 0;
+    if (dataSortCol === "type") {
+      cmp = a.type.localeCompare(b.type);
+    } else if (dataSortCol === "percentage") {
+      cmp = a.percentage - b.percentage;
+    } else {
+      cmp = a.count - b.count;
+    }
+    return dataSortDir === "asc" ? cmp : -cmp;
+  });
+}
+
+function sortedNews(
+  rows: DataTablePayload["alerts"]
+): DataTablePayload["alerts"] {
+  return [...rows].sort((a, b) => {
+    let cmp = 0;
+    if (dataSortCol === "title") {
+      cmp = a.title.localeCompare(b.title);
+    } else if (dataSortCol === "source") {
+      cmp = a.source.localeCompare(b.source);
+    } else {
+      cmp =
+        new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime();
+    }
+    return dataSortDir === "asc" ? cmp : -cmp;
+  });
+}
+
+function sortClass(col: string): string {
+  if (col !== dataSortCol) return "dt-sortable";
+  return `dt-sortable ${dataSortDir === "asc" ? "sort-asc" : "sort-desc"}`;
+}
+
+function sortIndicator(col: string): string {
+  if (col !== dataSortCol) return '<span class="sort-arrow">⇅</span>';
+  return `<span class="sort-arrow">${dataSortDir === "asc" ? "▲" : "▼"}</span>`;
+}
+
+function filteredTypes(): DataTablePayload["topTypes"] {
+  if (!currentDataPayload) return [];
+  if (!dataFilterText) return currentDataPayload.topTypes;
+  const q = dataFilterText.toLowerCase();
+  return currentDataPayload.topTypes.filter((r) =>
+    r.type.toLowerCase().includes(q)
+  );
+}
+
+function filteredAlerts(): DataTablePayload["alerts"] {
+  if (!currentDataPayload) return [];
+  if (!dataFilterText) return currentDataPayload.alerts;
+  const q = dataFilterText.toLowerCase();
+  return currentDataPayload.alerts.filter(
+    (r) =>
+      r.title.toLowerCase().includes(q) || r.source.toLowerCase().includes(q)
+  );
+}
+
+function renderDataPagination(totalItems: number): void {
+  const paginationEl = document.getElementById("dt-pagination");
+  if (!paginationEl) return;
+
+  const totalPages = Math.max(1, Math.ceil(totalItems / DATA_PAGE_SIZE));
+  const onFirst = dataCurrentPage === 0;
+  const onLast = dataCurrentPage >= totalPages - 1;
+
+  paginationEl.innerHTML = `
+    <button id="dt-prev-page" class="dt-pagination-btn" ${onFirst ? "disabled" : ""}>&larr; Prev</button>
+    <span class="dt-pagination-info">Page ${dataCurrentPage + 1} of ${totalPages}</span>
+    <button id="dt-next-page" class="dt-pagination-btn" ${onLast ? "disabled" : ""}>Next &rarr;</button>
+  `;
+
+  document.getElementById("dt-prev-page")?.addEventListener("click", () => {
+    if (dataCurrentPage > 0) {
+      dataCurrentPage--;
+      renderActiveDataTable();
+    }
+  });
+
+  document.getElementById("dt-next-page")?.addEventListener("click", () => {
+    if (dataCurrentPage < totalPages - 1) {
+      dataCurrentPage++;
+      renderActiveDataTable();
+    }
+  });
+}
+
+function renderStatsTable(): void {
+  if (!currentDataPayload) return;
+
+  const headEl = document.getElementById("dt-stats-head");
+  const bodyEl = document.getElementById("dt-stats-body");
+  if (!headEl || !bodyEl) return;
+
+  headEl.innerHTML = `
+    <tr>
+      <th class="${sortClass("type")}" data-col="type">Offense Type ${sortIndicator("type")}</th>
+      <th class="${sortClass("count")}" data-col="count">Count ${sortIndicator("count")}</th>
+      <th class="${sortClass("percentage")}" data-col="percentage">% of Total ${sortIndicator("percentage")}</th>
+    </tr>
+  `;
+
+  for (const th of headEl.querySelectorAll<HTMLElement>(".dt-sortable")) {
+    th.addEventListener("click", () => {
+      const col = th.dataset.col ?? "count";
+      if (col === dataSortCol) {
+        dataSortDir = dataSortDir === "asc" ? "desc" : "asc";
+      } else {
+        dataSortCol = col;
+        dataSortDir = "desc";
+      }
+      dataCurrentPage = 0;
+      renderStatsTable();
+      renderDataPagination(filteredTypes().length);
+    });
+  }
+
+  const filtered = filteredTypes();
+
+  if (filtered.length === 0) {
+    bodyEl.innerHTML = `
+      <tr><td colspan="3" class="dt-empty-state">
+        ${
+          currentDataPayload.topTypes.length === 0
+            ? "No crime statistics available. Set FBI_API_KEY for historical data."
+            : "No results match your filter."
+        }
+      </td></tr>
+    `;
+    renderDataPagination(0);
+    return;
+  }
+
+  const sorted = sortedTypes(filtered);
+  const start = dataCurrentPage * DATA_PAGE_SIZE;
+  const page = sorted.slice(start, start + DATA_PAGE_SIZE);
+
+  bodyEl.innerHTML = page
+    .map(
+      (row) => `
+      <tr>
+        <td>${esc(row.type)}</td>
+        <td class="dt-num-cell">${row.count.toLocaleString()}</td>
+        <td class="dt-num-cell">${row.percentage.toFixed(1)}%</td>
+      </tr>
+    `
+    )
+    .join("");
+
+  renderDataPagination(filtered.length);
+}
+
+function renderNewsTable(): void {
+  if (!currentDataPayload) return;
+
+  const headEl = document.getElementById("dt-news-head");
+  const bodyEl = document.getElementById("dt-news-body");
+  if (!headEl || !bodyEl) return;
+
+  headEl.innerHTML = `
+    <tr>
+      <th class="${sortClass("date")}" data-col="date">Date ${sortIndicator("date")}</th>
+      <th class="${sortClass("title")}" data-col="title">Title ${sortIndicator("title")}</th>
+      <th class="${sortClass("source")}" data-col="source">Source ${sortIndicator("source")}</th>
+    </tr>
+  `;
+
+  for (const th of headEl.querySelectorAll<HTMLElement>(".dt-sortable")) {
+    th.addEventListener("click", () => {
+      const col = th.dataset.col ?? "date";
+      if (col === dataSortCol) {
+        dataSortDir = dataSortDir === "asc" ? "desc" : "asc";
+      } else {
+        dataSortCol = col;
+        dataSortDir = "desc";
+      }
+      dataCurrentPage = 0;
+      renderNewsTable();
+      renderDataPagination(filteredAlerts().length);
+    });
+  }
+
+  const filtered = filteredAlerts();
+
+  if (filtered.length === 0) {
+    bodyEl.innerHTML = `
+      <tr><td colspan="3" class="dt-empty-state">
+        ${
+          currentDataPayload.alerts.length === 0
+            ? "No crime news found for this area."
+            : "No results match your filter."
+        }
+      </td></tr>
+    `;
+    renderDataPagination(0);
+    return;
+  }
+
+  const sorted = sortedNews(filtered);
+  const start = dataCurrentPage * DATA_PAGE_SIZE;
+  const page = sorted.slice(start, start + DATA_PAGE_SIZE);
+
+  bodyEl.innerHTML = page
+    .map((row) => {
+      const date = new Date(row.publishedAt).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+      return `
+        <tr>
+          <td class="dt-date-cell">${esc(date)}</td>
+          <td><a href="${esc(row.url)}" target="_blank" rel="noopener noreferrer" class="dt-table-link">${esc(row.title)}</a></td>
+          <td>${esc(row.source)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  renderDataPagination(filtered.length);
+}
+
+function renderActiveDataTable(): void {
+  if (dataActiveTab === "stats") {
+    renderStatsTable();
+  } else {
+    renderNewsTable();
+  }
+
+  const countEl = document.getElementById("dt-toolbar-count");
+  if (countEl && currentDataPayload) {
+    const filtered =
+      dataActiveTab === "stats"
+        ? filteredTypes().length
+        : filteredAlerts().length;
+    const total =
+      dataActiveTab === "stats"
+        ? currentDataPayload.topTypes.length
+        : currentDataPayload.alerts.length;
+    countEl.textContent = dataFilterText
+      ? `${filtered} of ${total}`
+      : `${total} rows`;
+  }
+}
+
+function renderSummaryCards(data: DataTablePayload): void {
+  const cardsEl = document.getElementById("dt-summary-cards");
+  if (!cardsEl) return;
+
+  const total =
+    data.bySeverity.high + data.bySeverity.medium + data.bySeverity.low;
+  const pctHigh = total > 0 ? (data.bySeverity.high / total) * 100 : 0;
+  const pctMedium = total > 0 ? (data.bySeverity.medium / total) * 100 : 0;
+  const pctLow = total > 0 ? (data.bySeverity.low / total) * 100 : 0;
+
+  cardsEl.innerHTML = `
+    <div class="dt-summary-card">
+      <div class="dt-summary-card-label">Total Incidents</div>
+      <div class="dt-summary-card-value">${data.totalIncidents.toLocaleString()}</div>
+      <div class="dt-summary-card-sub">${trendBadgeHtml(data.trend)}</div>
+    </div>
+    <div class="dt-summary-card">
+      <div class="dt-summary-card-label">High Severity</div>
+      <div class="dt-summary-card-value">${data.bySeverity.high.toLocaleString()}</div>
+    </div>
+    <div class="dt-summary-card">
+      <div class="dt-summary-card-label">Medium Severity</div>
+      <div class="dt-summary-card-value">${data.bySeverity.medium.toLocaleString()}</div>
+    </div>
+    <div class="dt-summary-card">
+      <div class="dt-summary-card-label">Low Severity</div>
+      <div class="dt-summary-card-value">${data.bySeverity.low.toLocaleString()}</div>
+    </div>
+    <div class="dt-severity-bar-wrap">
+      <div class="dt-severity-bar-label">Severity Distribution</div>
+      <div class="dt-severity-bar-track">
+        <div class="dt-severity-bar-segment dt-severity-bar-high" style="width:${pctHigh}%"></div>
+        <div class="dt-severity-bar-segment dt-severity-bar-medium" style="width:${pctMedium}%"></div>
+        <div class="dt-severity-bar-segment dt-severity-bar-low" style="width:${pctLow}%"></div>
+      </div>
+      <div class="dt-severity-bar-legend">
+        <div class="dt-severity-bar-legend-item"><span class="dt-severity-dot dt-severity-dot-high"></span>${data.bySeverity.high}</div>
+        <div class="dt-severity-bar-legend-item"><span class="dt-severity-dot dt-severity-dot-medium"></span>${data.bySeverity.medium}</div>
+        <div class="dt-severity-bar-legend-item"><span class="dt-severity-dot dt-severity-dot-low"></span>${data.bySeverity.low}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderDataPanel(data: DataTablePayload): void {
+  currentDataPayload = data;
+  dataFetched = true;
+
+  const panelEl = document.getElementById("data-panel");
+  const loadingEl = document.getElementById("dt-loading");
+  const contentEl = document.getElementById("dt-content");
+  if (panelEl) panelEl.removeAttribute("data-loading");
+  if (loadingEl) loadingEl.style.display = "none";
+  if (contentEl) contentEl.style.display = "flex";
+
+  // Reset state on fresh data
+  dataFilterText = "";
+  dataCurrentPage = 0;
+  dataSortCol = dataActiveTab === "stats" ? "count" : "date";
+  dataSortDir = "desc";
+
+  const filterInput = document.getElementById(
+    "dt-filter"
+  ) as HTMLInputElement | null;
+  if (filterInput) filterInput.value = "";
+
+  renderSummaryCards(data);
+  renderActiveDataTable();
+}
+
+// ── Fetch data panel (async, non-blocking) ────────────────────────────────────
+async function fetchDataPanel(zipCode: string, days: number): Promise<void> {
+  const panelEl = document.getElementById("data-panel");
+  const loadingEl = document.getElementById("dt-loading");
+  const contentEl = document.getElementById("dt-content");
+
+  if (panelEl) panelEl.setAttribute("data-loading", "true");
+  if (loadingEl) loadingEl.style.display = "flex";
+  if (contentEl) contentEl.style.display = "none";
+
+  dataFetched = false;
+
+  const result = await app.callServerTool({
+    name: "get_crime_data",
+    arguments: { zipCode, days },
+  });
+
+  const data = result.structuredContent as DataTablePayload | undefined;
+  if (data) {
+    renderDataPanel(data);
+  }
+}
+
+// ── View tab switching (Map / Data) ───────────────────────────────────────────
+function switchViewTab(tab: ViewTab): void {
+  activeViewTab = tab;
+
+  const mapEl = document.getElementById("map");
+  const legendEl = document.getElementById("legend");
+  const dataPanelEl = document.getElementById("data-panel");
+  const mapTabBtn = document.getElementById("view-tab-map");
+  const dataTabBtn = document.getElementById("view-tab-data");
+
+  if (tab === "map") {
+    if (mapEl) mapEl.style.display = "block";
+    if (legendEl) legendEl.style.display = "block";
+    if (dataPanelEl) dataPanelEl.style.display = "none";
+    if (mapTabBtn) mapTabBtn.classList.add("view-tab-active");
+    if (dataTabBtn) dataTabBtn.classList.remove("view-tab-active");
+  } else {
+    if (mapEl) mapEl.style.display = "none";
+    if (legendEl) legendEl.style.display = "none";
+    if (dataPanelEl) dataPanelEl.style.display = "flex";
+    if (mapTabBtn) mapTabBtn.classList.remove("view-tab-active");
+    if (dataTabBtn) dataTabBtn.classList.add("view-tab-active");
+
+    // Lazy-fetch data when switching to data tab for the first time
+    if (!dataFetched && currentZip) {
+      fetchDataPanel(currentZip, currentDays);
+    }
+  }
+}
+
+// Wire view tab buttons
+document.getElementById("view-tab-map")?.addEventListener("click", () => {
+  switchViewTab("map");
+});
+document.getElementById("view-tab-data")?.addEventListener("click", () => {
+  switchViewTab("data");
+});
+
+// ── Data panel internal tab switching (Statistics / News) ─────────────────────
+function activateDataTab(tab: "stats" | "news"): void {
+  dataActiveTab = tab;
+  dataFilterText = "";
+  dataCurrentPage = 0;
+
+  const filterInput = document.getElementById(
+    "dt-filter"
+  ) as HTMLInputElement | null;
+  if (filterInput) filterInput.value = "";
+
+  const tabButtons = document.querySelectorAll<HTMLButtonElement>("#dt-tabs .dt-tab");
+  for (const btn of tabButtons) {
+    btn.classList.toggle("dt-tab-active", btn.dataset.tab === tab);
+    btn.setAttribute(
+      "aria-selected",
+      btn.dataset.tab === tab ? "true" : "false"
+    );
+  }
+
+  const statsPanel = document.getElementById("dt-stats-panel");
+  const newsPanel = document.getElementById("dt-news-panel");
+  if (statsPanel) statsPanel.style.display = tab === "stats" ? "block" : "none";
+  if (newsPanel) newsPanel.style.display = tab === "news" ? "block" : "none";
+
+  dataSortCol = tab === "stats" ? "count" : "date";
+  dataSortDir = "desc";
+
+  renderActiveDataTable();
+}
+
+// Wire data panel tab buttons
+for (const btn of document.querySelectorAll<HTMLButtonElement>("#dt-tabs .dt-tab")) {
+  btn.addEventListener("click", () => {
+    const tab = btn.dataset.tab as "stats" | "news";
+    if (tab) activateDataTab(tab);
+  });
+}
+
+// Wire data panel filter input
+const dtFilterInput = document.getElementById("dt-filter") as HTMLInputElement | null;
+dtFilterInput?.addEventListener("input", () => {
+  dataFilterText = dtFilterInput.value;
+  dataCurrentPage = 0;
+  renderActiveDataTable();
+});
+
+// ── MCP App connection ────────────────────────────────────────────────────────
 const app = new App({ name: "neighborhood", version: "1.0.0" });
 
 app.ontoolresult = (params) => {
@@ -650,6 +1109,9 @@ app.ontoolresult = (params) => {
   if (data) {
     renderMap(data);
     app.sendSizeChanged({ height: 600 });
+
+    // Kick off data panel fetch non-blocking after map is rendered
+    fetchDataPanel(data.zipCode, data.days);
   }
 };
 
@@ -657,7 +1119,7 @@ app.connect().then(() => {
   app.sendSizeChanged({ height: 600 });
 });
 
-// Zip code editing
+// ── Zip code editing ──────────────────────────────────────────────────────────
 const zipDisplay = document.getElementById("zip") as HTMLElement;
 const zipForm = document.getElementById("zip-form") as HTMLFormElement;
 const zipInput = document.getElementById("zip-input") as HTMLInputElement;
@@ -688,6 +1150,7 @@ async function submitZip(newZip: string) {
 
   hideZipEditor();
   zipDisplay.textContent = trimmed;
+  currentZip = trimmed;
 
   const metaEl = document.getElementById("meta");
   if (metaEl)
@@ -701,6 +1164,8 @@ async function submitZip(newZip: string) {
   const data = result.structuredContent as MapData | undefined;
   if (data) {
     renderMap(data);
+    // Refresh data panel after zip change
+    fetchDataPanel(trimmed, currentDays);
   }
 }
 
