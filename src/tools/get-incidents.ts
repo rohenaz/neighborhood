@@ -1,11 +1,8 @@
 import { zipToCoordinates } from "../geocode.ts";
 import { buildFeatureCollection } from "../normalize.ts";
 import { fetchArcGIS } from "../sources/arcgis.ts";
-import { fetchCrimeMapping } from "../sources/crimemapping.ts";
 import { fetchFBI } from "../sources/fbi.ts";
 import { fetchNewsAsIncidents } from "../sources/news.ts";
-import { fetchNSOPW } from "../sources/nsopw.ts";
-import { fetchSpotCrime } from "../sources/spotcrime.ts";
 import type {
   IncidentFeatureCollection,
   IncidentSource,
@@ -20,14 +17,7 @@ export interface GetIncidentsInput {
   days?: number; // default 30
 }
 
-const ALL_SOURCES: IncidentSource[] = [
-  "spotcrime",
-  "crimemapping",
-  "arcgis",
-  "nsopw",
-  "fbi",
-  "news",
-];
+const ALL_SOURCES: IncidentSource[] = ["arcgis", "fbi", "news"];
 
 export async function getIncidents(
   input: GetIncidentsInput
@@ -42,20 +32,8 @@ export async function getIncidents(
 
   const allFetchers: Array<{ source: IncidentSource; fetch: SourceFetch }> = [
     {
-      source: "spotcrime" as const,
-      fetch: () => fetchSpotCrime(lat, lng, radius),
-    },
-    {
-      source: "crimemapping" as const,
-      fetch: () => fetchCrimeMapping(lat, lng, radius, days),
-    },
-    {
       source: "arcgis" as const,
       fetch: () => fetchArcGIS(lat, lng, radius, days),
-    },
-    {
-      source: "nsopw" as const,
-      fetch: () => fetchNSOPW(zipCode, radius),
     },
     {
       source: "fbi" as const,
@@ -63,7 +41,7 @@ export async function getIncidents(
     },
     {
       source: "news" as const,
-      fetch: () => fetchNewsAsIncidents(zipCode, lat, lng),
+      fetch: () => fetchNewsAsIncidents(zipCode, lat, lng, coords.displayName),
     },
   ];
   const sourceFetchers = allFetchers.filter((f) =>

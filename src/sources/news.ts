@@ -6,13 +6,7 @@ import type { NewsAlert } from "../types.ts";
 const GOOGLE_NEWS_RSS = (query: string) =>
   `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
 
-// Patch.com feeds for Austin, TX / Travis County area
-const PATCH_FEEDS = [
-  "https://patch.com/texas/downtownaustin/local-news/rss.xml",
-  "https://patch.com/texas/eastaustin/local-news/rss.xml",
-  "https://patch.com/texas/roundrock/local-news/rss.xml",
-  "https://patch.com/texas/cedarpark/local-news/rss.xml",
-];
+// Patch.com feeds are generated dynamically per location — see fetchNewsAlerts
 
 interface RSSItem {
   title: string;
@@ -144,18 +138,54 @@ async function fetchFeed(url: string, sourceName: string): Promise<RSSItem[]> {
 
 export async function fetchNewsAlerts(
   zipCode: string,
-  keywords: string[] = []
+  keywords: string[] = [],
+  locationName?: string
 ): Promise<NewsAlert[]> {
-  const queries = [
-    `${zipCode} crime`,
-    `Austin Texas crime`,
-    `Travis County Texas crime`,
-  ];
+  // Build location-aware queries from the geocoded display name
+  // displayName typically looks like "48313, Macomb County, Michigan, United States"
+  let cityName = "";
+  let countyName = "";
+  let stateName = "";
 
-  const feedUrls: Array<{ url: string; source: string }> = [
-    ...queries.map((q) => ({ url: GOOGLE_NEWS_RSS(q), source: "Google News" })),
-    ...PATCH_FEEDS.map((url) => ({ url, source: "Patch.com" })),
-  ];
+  if (locationName) {
+    const parts = locationName.split(",").map((p) => p.trim());
+    // Nominatim format: "zip, County, State, Country" or "City, County, State, Country"
+    for (const part of parts) {
+      if (part.match(/county$/i)) {
+        countyName = part;
+      } else if (
+        part.match(
+          /^(Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming)$/i
+        )
+      ) {
+        stateName = part;
+      } else if (
+        part !== zipCode &&
+        !part.match(/united states/i) &&
+        !part.match(/^\d+$/) &&
+        !cityName
+      ) {
+        cityName = part;
+      }
+    }
+  }
+
+  const queries: string[] = [`${zipCode} crime`];
+  if (cityName && stateName) {
+    queries.push(`${cityName} ${stateName} crime`);
+  }
+  if (countyName && stateName) {
+    queries.push(`${countyName} ${stateName} crime`);
+  }
+  // Fallback if we couldn't parse location
+  if (queries.length === 1) {
+    queries.push(`${zipCode} police`);
+  }
+
+  const feedUrls: Array<{ url: string; source: string }> = queries.map((q) => ({
+    url: GOOGLE_NEWS_RSS(q),
+    source: "Google News",
+  }));
 
   const results = await Promise.allSettled(
     feedUrls.map(({ url, source }) => fetchFeed(url, source))
@@ -208,9 +238,10 @@ import type { RawIncident } from "../types.ts";
 export async function fetchNewsAsIncidents(
   zipCode: string,
   lat: number,
-  lng: number
+  lng: number,
+  locationName?: string
 ): Promise<RawIncident[]> {
-  const alerts = await fetchNewsAlerts(zipCode, []);
+  const alerts = await fetchNewsAlerts(zipCode, [], locationName);
 
   return alerts.slice(0, 20).map(
     (alert, idx): RawIncident => ({

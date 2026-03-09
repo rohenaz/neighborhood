@@ -1,7 +1,8 @@
 import { zipToCoordinates } from "../geocode.ts";
 import { classifySeverity } from "../normalize.ts";
+import { fetchArcGIS } from "../sources/arcgis.ts";
 import { fetchFBIStats } from "../sources/fbi.ts";
-import { fetchSpotCrime } from "../sources/spotcrime.ts";
+import { fetchNewsAsIncidents } from "../sources/news.ts";
 import type {
   CrimeStats,
   IncidentSeverity,
@@ -24,22 +25,47 @@ export async function getCrimeStats(
   const sourceErrors: SourceError[] = [];
   const allIncidents: RawIncident[] = [];
 
-  // Recent incidents from SpotCrime
-  try {
-    const spotcrimeData = await fetchSpotCrime(lat, lng, 10);
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    allIncidents.push(
-      ...spotcrimeData.filter((i) => new Date(i.date) >= cutoff)
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[spotcrime] stats fetch failed: ${msg}`);
-    sourceErrors.push({
-      source: "spotcrime",
-      error: msg,
-      timestamp: new Date().toISOString(),
-    });
+  // Gather incidents from all working sources
+  const fetchers = [
+    { source: "arcgis", fetch: () => fetchArcGIS(lat, lng, 10, days) },
+    {
+      source: "news",
+      fetch: () => fetchNewsAsIncidents(zipCode, lat, lng, coords.displayName),
+    },
+  ];
+
+  const incidentResults = await Promise.allSettled(
+    fetchers.map(({ fetch }) => fetch())
+  );
+
+  for (let i = 0; i < incidentResults.length; i++) {
+    const result = incidentResults[i];
+    const fetcher = fetchers[i];
+    if (!result || !fetcher) continue;
+
+    if (result.status === "fulfilled") {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      allIncidents.push(
+        ...result.value.filter((inc) => {
+          try {
+            return new Date(inc.date) >= cutoff;
+          } catch {
+            return true;
+          }
+        })
+      );
+    } else {
+      const msg =
+        result.reason instanceof Error
+          ? result.reason.message
+          : String(result.reason);
+      sourceErrors.push({
+        source: fetcher.source,
+        error: msg,
+        timestamp: new Date().toISOString(),
+      });
+    }
   }
 
   // FBI historical stats

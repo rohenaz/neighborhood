@@ -1,10 +1,4 @@
-export type IncidentSource =
-  | "spotcrime"
-  | "crimemapping"
-  | "arcgis"
-  | "nsopw"
-  | "fbi"
-  | "news";
+export type IncidentSource = "arcgis" | "fbi" | "news";
 
 export type IncidentSeverity = "low" | "medium" | "high";
 

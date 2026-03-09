@@ -31,6 +31,30 @@ interface ArcGISResponse {
   error?: { code: number; message: string };
 }
 
+// Reject services whose names clearly aren't crime-related
+const NON_CRIME_PATTERNS = [
+  /covid/i,
+  /coronavirus/i,
+  /pandemic/i,
+  /vaccine/i,
+  /health(?!\s*(?:and\s+)?safety)/i,
+  /census/i,
+  /election/i,
+  /weather/i,
+  /traffic(?!\s*stop)/i,
+  /zoning/i,
+  /parcel/i,
+  /permit/i,
+  /water(?:shed)?/i,
+  /sewer/i,
+  /school/i,
+  /park(?:ing|s)\b/i,
+  /boundary/i,
+  /tax/i,
+  /flood/i,
+  /demographic/i,
+];
+
 // Search ArcGIS Online for public crime-related feature services near given bbox
 async function discoverCrimeServices(bbox: {
   minLat: number;
@@ -40,11 +64,11 @@ async function discoverCrimeServices(bbox: {
 }): Promise<ArcGISSearchResult[]> {
   const bboxStr = `${bbox.minLng},${bbox.minLat},${bbox.maxLng},${bbox.maxLat}`;
   const params = new URLSearchParams({
-    q: 'crime OR incidents OR offenses type:"Feature Service"',
+    q: '(crime OR "police incidents" OR "criminal offenses" OR "crime reports" OR "police reports") type:"Feature Service" access:public',
     bbox: bboxStr,
     sortField: "numviews",
     sortOrder: "desc",
-    num: "5",
+    num: "8",
     f: "json",
   });
 
@@ -66,7 +90,12 @@ async function discoverCrimeServices(bbox: {
   if (!data.results?.length) return [];
 
   return data.results
-    .filter((r) => r.url)
+    .filter((r) => {
+      if (!r.url) return false;
+      const name = r.title ?? r.name ?? "";
+      // Filter out services that clearly aren't crime data
+      return !NON_CRIME_PATTERNS.some((pattern) => pattern.test(name));
+    })
     .map((r) => ({
       id: r.id ?? "unknown",
       name: r.title ?? r.name ?? "Unknown",
@@ -186,11 +215,27 @@ async function queryService(
   });
 
   if (!response.ok) {
+    // 499 = token required, 403 = forbidden — skip these silently
+    if (
+      response.status === 499 ||
+      response.status === 403 ||
+      response.status === 401
+    ) {
+      return []; // Service requires auth, not an error — just no data from this one
+    }
     throw new Error(`ArcGIS ${serviceName} error: HTTP ${response.status}`);
   }
 
   const data = (await response.json()) as ArcGISResponse;
   if (data.error) {
+    // Token/auth errors — skip silently
+    if (
+      data.error.code === 499 ||
+      data.error.code === 403 ||
+      data.error.code === 401
+    ) {
+      return [];
+    }
     throw new Error(
       `ArcGIS ${serviceName} error: ${data.error.code} — ${data.error.message}`
     );

@@ -14,15 +14,6 @@ interface SourceMeta {
 
 const SOURCE_METADATA: SourceMeta[] = [
   {
-    name: "crimemapping",
-    label: "CrimeMapping (Axon)",
-    coverage: "Participating US police agencies — varies by city",
-    updateFrequency: "Daily",
-    requiresApiKey: false,
-    unlocks: "Real-time incidents from police agencies using the Axon platform",
-    testUrl: "https://www.crimemapping.com/",
-  },
-  {
     name: "arcgis",
     label: "ArcGIS Open Data",
     coverage: "County/city GIS portals with public crime layers",
@@ -30,15 +21,6 @@ const SOURCE_METADATA: SourceMeta[] = [
     requiresApiKey: false,
     unlocks: "GIS-sourced crime data from local government open data portals",
     testUrl: "https://www.arcgis.com/",
-  },
-  {
-    name: "nsopw",
-    label: "National Sex Offender Registry (NSOPW)",
-    coverage: "National — all 50 states + DC + territories",
-    updateFrequency: "Real-time (pulled from state registries)",
-    requiresApiKey: false,
-    unlocks: "Registered sex offender locations near any US address",
-    testUrl: "https://www.nsopw.gov/",
   },
   {
     name: "news",
@@ -60,18 +42,6 @@ const SOURCE_METADATA: SourceMeta[] = [
     unlocks:
       "Historical crime statistics by offense type for nearby agencies — adds trend context to real-time data",
     testUrl: "https://api.usa.gov/crime/fbi/cde/",
-  },
-  {
-    name: "spotcrime",
-    label: "SpotCrime",
-    coverage: "National — aggregates police blotter data from 1,500+ agencies",
-    updateFrequency: "Daily",
-    requiresApiKey: true,
-    apiKeyEnvVar: "SPOTCRIME_API_KEY",
-    signupUrl: "https://spotcrime.com/police/api",
-    unlocks:
-      "Daily crime incidents from police blotters — the largest single source of real-time incident data",
-    testUrl: "https://api.spotcrime.com/crimes.json",
   },
 ];
 

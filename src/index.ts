@@ -27,9 +27,7 @@ const GetIncidentsSchema = z.object({
     .default(5)
     .describe("Search radius in miles (default: 5)"),
   sources: z
-    .array(
-      z.enum(["spotcrime", "crimemapping", "arcgis", "nsopw", "fbi", "news"])
-    )
+    .array(z.enum(["arcgis", "fbi", "news"]))
     .optional()
     .describe("Data sources to query (default: all)"),
   days: z
@@ -108,14 +106,7 @@ const TOOLS = [
           type: "array",
           items: {
             type: "string",
-            enum: [
-              "spotcrime",
-              "crimemapping",
-              "arcgis",
-              "nsopw",
-              "fbi",
-              "news",
-            ],
+            enum: ["arcgis", "fbi", "news"],
           },
           description: "Specific data sources to query (default: all)",
         },
