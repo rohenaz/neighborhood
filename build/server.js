@@ -39995,7 +39995,33 @@ async function getIncidents(input) {
     seen.add(inc.id);
     return true;
   });
-  return buildFeatureCollection(zipCode, radius, days, deduped, sourceErrors);
+  const final = deduplicateSpatial(deduped);
+  return buildFeatureCollection(zipCode, radius, days, final, sourceErrors);
+}
+function deduplicateSpatial(incidents) {
+  const RADIUS_DEG = 100 / 111000;
+  const TIME_WINDOW_MS = 24 * 60 * 60 * 1000;
+  const sorted = [...incidents].sort((a2, b2) => {
+    const scoreA = (a2.description?.length || 0) + (a2.url ? 100 : 0);
+    const scoreB = (b2.description?.length || 0) + (b2.url ? 100 : 0);
+    return scoreB - scoreA;
+  });
+  const kept = [];
+  for (const inc of sorted) {
+    const isDupe = kept.some((k2) => {
+      if (k2.type.toLowerCase() !== inc.type.toLowerCase())
+        return false;
+      const timeDiff = Math.abs(new Date(k2.date).getTime() - new Date(inc.date).getTime());
+      if (timeDiff > TIME_WINDOW_MS)
+        return false;
+      const latDiff = Math.abs(k2.lat - inc.lat);
+      const lngDiff = Math.abs(k2.lng - inc.lng);
+      return latDiff < RADIUS_DEG && lngDiff < RADIUS_DEG;
+    });
+    if (!isDupe)
+      kept.push(inc);
+  }
+  return kept;
 }
 
 // src/tools/list-sources.ts
@@ -40233,6 +40259,7 @@ function registerResources(server) {
         days: args.days,
         lat: coords.lat,
         lng: coords.lng,
+        mapboxToken: process.env.MAPBOX_TOKEN || undefined,
         features: collection.features,
         sourceErrors: collection.sourceErrors,
         scannerFeeds,
@@ -40252,7 +40279,7 @@ function registerResources(server) {
     };
   });
   cD(server, "Crime Map View", MAP_RESOURCE_URI, {
-    description: "Interactive Leaflet crime map with dark theme"
+    description: "Interactive MapLibre GL crime map with dark theme"
   }, async () => {
     const distPath = join2(__dirname2, "..", "dist", "map.html");
     let viewPath;
@@ -40272,8 +40299,16 @@ function registerResources(server) {
           _meta: {
             ui: {
               csp: {
-                resourceDomains: ["https://*.tile.openstreetmap.org"],
-                connectDomains: ["https://*.tile.openstreetmap.org"]
+                resourceDomains: [
+                  "https://*.basemaps.cartocdn.com",
+                  "https://api.mapbox.com",
+                  "https://*.tiles.mapbox.com"
+                ],
+                connectDomains: [
+                  "https://*.basemaps.cartocdn.com",
+                  "https://api.mapbox.com",
+                  "https://*.tiles.mapbox.com"
+                ]
               }
             }
           }

@@ -159,5 +159,34 @@ export async function getIncidents(
     return true;
   });
 
-  return buildFeatureCollection(zipCode, radius, days, deduped, sourceErrors);
+  // Cross-source spatial+temporal deduplication
+  const final = deduplicateSpatial(deduped);
+
+  return buildFeatureCollection(zipCode, radius, days, final, sourceErrors);
+}
+
+function deduplicateSpatial(incidents: RawIncident[]): RawIncident[] {
+  const RADIUS_DEG = 100 / 111_000; // ~100m in degrees
+  const TIME_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+  // Sort by detail richness — keep the most informative version
+  const sorted = [...incidents].sort((a, b) => {
+    const scoreA = (a.description?.length || 0) + (a.url ? 100 : 0);
+    const scoreB = (b.description?.length || 0) + (b.url ? 100 : 0);
+    return scoreB - scoreA;
+  });
+
+  const kept: RawIncident[] = [];
+  for (const inc of sorted) {
+    const isDupe = kept.some(k => {
+      if (k.type.toLowerCase() !== inc.type.toLowerCase()) return false;
+      const timeDiff = Math.abs(new Date(k.date).getTime() - new Date(inc.date).getTime());
+      if (timeDiff > TIME_WINDOW_MS) return false;
+      const latDiff = Math.abs(k.lat - inc.lat);
+      const lngDiff = Math.abs(k.lng - inc.lng);
+      return latDiff < RADIUS_DEG && lngDiff < RADIUS_DEG;
+    });
+    if (!isDupe) kept.push(inc);
+  }
+  return kept;
 }

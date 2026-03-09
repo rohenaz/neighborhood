@@ -246,6 +246,7 @@ function registerResources(server: McpServer) {
           days: args.days,
           lat: coords.lat,
           lng: coords.lng,
+          mapboxToken: process.env.MAPBOX_TOKEN || undefined,
           features: collection.features,
           sourceErrors: collection.sourceErrors,
           scannerFeeds,
@@ -274,7 +275,7 @@ function registerResources(server: McpServer) {
     "Crime Map View",
     MAP_RESOURCE_URI,
     {
-      description: "Interactive Leaflet crime map with dark theme",
+      description: "Interactive MapLibre GL crime map with dark theme",
     },
     async () => {
       // Prefer the Vite-built single-file bundle; fall back to source only in
@@ -303,10 +304,18 @@ function registerResources(server: McpServer) {
             _meta: {
               ui: {
                 csp: {
-                  // All JS/CSS is inlined by vite-plugin-singlefile; only OSM
-                  // tile requests need network access.
-                  resourceDomains: ["https://*.tile.openstreetmap.org"],
-                  connectDomains: ["https://*.tile.openstreetmap.org"],
+                  // All JS/CSS is inlined by vite-plugin-singlefile; tile
+                  // and style requests need network access.
+                  resourceDomains: [
+                    "https://*.basemaps.cartocdn.com",
+                    "https://api.mapbox.com",
+                    "https://*.tiles.mapbox.com",
+                  ],
+                  connectDomains: [
+                    "https://*.basemaps.cartocdn.com",
+                    "https://api.mapbox.com",
+                    "https://*.tiles.mapbox.com",
+                  ],
                 },
               },
             },
